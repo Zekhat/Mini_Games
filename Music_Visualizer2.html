@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON RUINS — Cyberpunk Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --cyan: #00e5ff;
+  --magenta: #ff0090;
+  --green: #39ff14;
+  --amber: #ff8800;
+  --red: #ff2244;
+  --violet: #8b00ff;
+  --metal-dark: #0d0d12;
+  --metal-mid: #1a1a22;
+  --metal-light: #2a2a35;
+  --metal-highlight: #3a3a48;
+  --rust: #3d2a1a;
+  --panel-bg: linear-gradient(180deg, #14141c 0%, #0d0d14 100%);
+  --panel-border: #2a2a35;
+  --panel-inset: #08080c;
+  --text: #a0a0b0;
+  --text-dim: #505068;
+  --text-bright: #d0d0e0;
+  --rivet: #3a3a48;
+}
+
+body {
+  background: #050508;
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 300px 1fr 280px;
+  grid-template-rows: 1fr 80px;
+  height: 100vh;
+  gap: 0;
+}
+
+/* === METAL PANEL STYLING === */
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--metal-highlight) var(--metal-dark);
+  position: relative;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--metal-highlight), transparent);
+  z-index: 1;
+}
+
+.panel::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,136,0,0.2), transparent);
+  z-index: 1;
+}
+
+.panel::-webkit-scrollbar { width: 6px; }
+.panel::-webkit-scrollbar-track { background: var(--metal-dark); }
+.panel::-webkit-scrollbar-thumb { 
+  background: linear-gradient(180deg, var(--metal-highlight), var(--metal-mid)); 
+  border-radius: 1px;
+  border: 1px solid var(--metal-dark);
+}
+
+.panel-inner {
+  padding: 12px 14px;
+  position: relative;
+}
+
+/* Corner rivets */
+.rivet {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--metal-highlight), var(--metal-dark));
+  border: 1px solid #1a1a22;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.1), 0 1px 2px rgba(0,0,0,0.5);
+  z-index: 2;
+}
+.rivet.tl { top: 6px; left: 6px; }
+.rivet.tr { top: 6px; right: 6px; }
+.rivet.bl { bottom: 6px; left: 6px; }
+.rivet.br { bottom: 6px; right: 6px; }
+
+.panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: linear-gradient(90deg, rgba(255,136,0,0.08), transparent);
+  border-left: 2px solid var(--amber);
+  border-bottom: 1px solid rgba(255,136,0,0.1);
+  position: relative;
+  text-shadow: 0 0 10px rgba(255,136,0,0.3);
+}
+
+.panel-title::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+#left-panel { grid-column: 1; grid-row: 1; }
+#viewport { grid-column: 2; grid-row: 1; position: relative; background: #000; }
+#right-panel { grid-column: 3; grid-row: 1; }
+#bottom-bar { grid-column: 1 / -1; grid-row: 2; }
+
+/* Upload Area */
+#upload-area {
+  border: 1px solid var(--metal-highlight);
+  background: linear-gradient(135deg, rgba(20,20,30,0.8), rgba(10,10,15,0.9));
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-bottom: 10px;
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+#upload-area:hover {
+  border-color: var(--cyan);
+  box-shadow: inset 0 0 20px rgba(0,229,255,0.05), 0 0 10px rgba(0,229,255,0.1);
+}
+#upload-area .icon { 
+  font-size: 20px; 
+  color: var(--cyan); 
+  margin-bottom: 4px;
+  text-shadow: 0 0 10px var(--cyan);
+}
+#upload-area .label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+#upload-area input { display: none; }
+
+/* Form Controls - Industrial Style */
+.form-group { margin-bottom: 8px; }
+.form-group label {
+  display: block;
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 3px;
+}
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+  width: 100%;
+  background: var(--panel-inset);
+  border: 1px solid var(--metal-highlight);
+  border-top-color: #1a1a22;
+  border-left-color: #1a1a22;
+  color: var(--cyan);
+  padding: 5px 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: var(--amber);
+  box-shadow: inset 0 0 8px rgba(255,136,0,0.1), 0 0 5px rgba(255,136,0,0.1);
+}
+.form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23ff8800'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+/* Sliders - Industrial */
+.slider-group { margin-bottom: 8px; }
+.slider-group label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+.slider-group label span { color: var(--amber); font-family: 'Orbitron', sans-serif; font-size: 9px; }
+input[type="range"] {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  background: var(--panel-inset);
+  border: 1px solid var(--metal-highlight);
+  border-top-color: #111;
+  border-left-color: #111;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 18px;
+  background: linear-gradient(180deg, var(--metal-highlight), var(--metal-mid));
+  border: 1px solid var(--amber);
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(255,136,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+  clip-path: polygon(20% 0, 80% 0, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0 80%, 0 20%);
+}
+
+/* Master Intensity - Special */
+.master-intensity {
+  background: linear-gradient(135deg, rgba(255,136,0,0.05), rgba(255,0,144,0.05));
+  border: 1px solid rgba(255,136,0,0.3);
+  padding: 10px;
+  margin-bottom: 12px;
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.master-intensity::before {
+  content: '⚠';
+  position: absolute;
+  top: 4px;
+  right: 12px;
+  color: var(--amber);
+  font-size: 10px;
+  animation: blink 1.5s ease-in-out infinite;
+}
+.master-intensity .master-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  color: var(--amber);
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+  text-shadow: 0 0 8px rgba(255,136,0,0.4);
+}
+.master-intensity .master-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  color: var(--amber);
+  text-shadow: 0 0 15px rgba(255,136,0,0.5);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+/* Buttons - Metal */
+.btn {
+  padding: 5px 10px;
+  border: 1px solid var(--metal-highlight);
+  background: linear-gradient(180deg, var(--metal-light), var(--metal-mid));
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+  border-top-color: var(--metal-highlight);
+  border-left-color: var(--metal-highlight);
+  border-bottom-color: #111;
+  border-right-color: #111;
+}
+.btn:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+  box-shadow: 0 0 8px rgba(255,136,0,0.2);
+}
+.btn:active {
+  border-top-color: #111;
+  border-left-color: #111;
+  border-bottom-color: var(--metal-highlight);
+  border-right-color: var(--metal-highlight);
+}
+.btn-primary {
+  background: linear-gradient(180deg, rgba(0,229,255,0.15), rgba(0,229,255,0.05));
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.btn-primary:hover { box-shadow: 0 0 12px rgba(0,229,255,0.3); }
+.btn-danger {
+  background: linear-gradient(180deg, rgba(255,0,144,0.15), rgba(255,0,144,0.05));
+  border-color: var(--magenta);
+  color: var(--magenta);
+}
+.btn-danger:hover { box-shadow: 0 0 12px rgba(255,0,144,0.3); }
+
+.btn-row { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+
+/* Spectrogram */
+#spectrogram-container {
+  width: 100%;
+  height: 140px;
+  border: 1px solid var(--metal-highlight);
+  overflow: hidden;
+  margin-bottom: 10px;
+  position: relative;
+  background: var(--panel-inset);
+}
+#spectrogram-container::before {
+  content: 'SPECTRUM ANALYZER';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  font-size: 7px;
+  color: var(--amber);
+  letter-spacing: 1px;
+  z-index: 2;
+  opacity: 0.7;
+}
+#spectrogram-canvas { width: 100%; height: 100%; }
+
+/* Waveform */
+#waveform-container {
+  width: 100%;
+  height: 50px;
+  border: 1px solid var(--metal-highlight);
+  overflow: hidden;
+  margin-bottom: 10px;
+  cursor: pointer;
+  background: var(--panel-inset);
+  position: relative;
+}
+#waveform-container::before {
+  content: 'WAVEFORM';
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  font-size: 7px;
+  color: var(--amber);
+  letter-spacing: 1px;
+  z-index: 2;
+  opacity: 0.7;
+}
+#waveform-canvas { width: 100%; height: 100%; }
+
+/* Beat Display */
+.beat-display {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.beat-item {
+  background: var(--panel-inset);
+  border: 1px solid var(--metal-highlight);
+  padding: 6px;
+  text-align: center;
+  position: relative;
+}
+.beat-item .value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0,229,255,0.4);
+}
+.beat-item .label {
+  font-size: 7px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 2px;
+}
+
+/* Band Meters */
+.band-meters { margin-bottom: 10px; }
+.band-meter { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+.band-meter .band-label { font-size: 7px; width: 42px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.band-meter .band-bar-bg { flex: 1; height: 5px; background: var(--panel-inset); border: 1px solid #1a1a22; overflow: hidden; }
+.band-meter .band-bar { height: 100%; transition: width 0.05s; width: 0%; }
+
+/* Viewport Overlay */
+#viewport-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
+#title-overlay {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#title-overlay.visible { opacity: 1; }
+#title-overlay .artist {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  color: var(--cyan);
+  text-shadow: 0 0 20px var(--cyan);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+#title-overlay .song {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 0 30px var(--magenta), 0 0 60px var(--magenta);
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+#format-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(10,10,15,0.8);
+  border: 1px solid var(--metal-highlight);
+  padding: 3px 8px;
+  font-size: 8px;
+  color: var(--amber);
+  letter-spacing: 1px;
+}
+
+#fps-counter {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 9px;
+  color: var(--green);
+  font-family: 'Orbitron', sans-serif;
+  text-shadow: 0 0 8px rgba(57,255,20,0.4);
+}
+
+/* Scanline overlay */
+#scanlines {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Bottom Bar - Industrial Console */
+#bottom-bar {
+  background: linear-gradient(180deg, #1a1a24, #0d0d14);
+  border-top: 2px solid var(--metal-highlight);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  position: relative;
+}
+#bottom-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--amber), transparent);
+  opacity: 0.3;
+}
+
+#play-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 2px solid var(--amber);
+  background: linear-gradient(180deg, var(--metal-light), var(--metal-dark));
+  color: var(--amber);
+  cursor: pointer;
+  transition: all 0.2s;
+  clip-path: polygon(15% 0, 85% 0, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 15%);
+  text-shadow: 0 0 10px var(--amber);
+}
+#play-btn:hover {
+  background: linear-gradient(180deg, rgba(255,136,0,0.2), var(--metal-dark));
+  box-shadow: 0 0 15px rgba(255,136,0,0.3);
+}
+
+#progress-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--panel-inset);
+  border: 1px solid var(--metal-highlight);
+  cursor: pointer;
+  position: relative;
+}
+#progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--amber), var(--magenta));
+  width: 0%;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 6px rgba(255,136,0,0.3);
+}
+#time-display {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--amber);
+  min-width: 110px;
+  text-align: center;
+  text-shadow: 0 0 8px rgba(255,136,0,0.3);
+}
+
+/* Toggle Switch - Industrial */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.toggle-row label { font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.toggle {
+  width: 34px;
+  height: 16px;
+  background: var(--panel-inset);
+  border: 1px solid var(--metal-highlight);
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.toggle.active {
+  background: rgba(255,136,0,0.1);
+  border-color: var(--amber);
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(180deg, var(--metal-highlight), var(--metal-mid));
+  border: 1px solid var(--metal-dark);
+  top: 2px;
+  left: 2px;
+  transition: all 0.2s;
+}
+.toggle.active::after {
+  left: 20px;
+  background: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
+  border-color: var(--amber);
+}
+
+/* Palette */
+.palette-row { display: flex; gap: 4px; margin-bottom: 8px; }
+.palette-swatch {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  border: 1px solid var(--metal-highlight);
+  transition: all 0.2s;
+}
+.palette-swatch:hover { transform: scale(1.15); }
+.palette-swatch.active { border: 2px solid var(--amber); box-shadow: 0 0 8px rgba(255,136,0,0.4); }
+
+/* Section Divider */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--metal-highlight), transparent);
+  margin: 10px 0;
+  position: relative;
+}
+.section-divider::before {
+  content: '◆';
+  position: absolute;
+  left: 50%;
+  top: -5px;
+  transform: translateX(-50%);
+  font-size: 6px;
+  color: var(--metal-highlight);
+}
+
+/* Preset List */
+.preset-list { margin-bottom: 10px; }
+.preset-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 9px;
+  transition: all 0.15s;
+  margin-bottom: 2px;
+  background: rgba(0,0,0,0.2);
+}
+.preset-item:hover {
+  border-color: var(--metal-highlight);
+  background: rgba(255,136,0,0.03);
+}
+.preset-item.active {
+  border-color: var(--amber);
+  background: rgba(255,136,0,0.08);
+  color: var(--amber);
+}
+
+/* Loading */
+#loading-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #050508;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: opacity 0.5s;
+}
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+#loading-overlay .logo {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--amber);
+  text-shadow: 0 0 40px rgba(255,136,0,0.5);
+  margin-bottom: 8px;
+  letter-spacing: 4px;
+}
+#loading-overlay .subtitle {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+#loading-overlay .loading-bar {
+  width: 200px;
+  height: 3px;
+  background: var(--metal-dark);
+  margin-top: 20px;
+  border: 1px solid var(--metal-highlight);
+  overflow: hidden;
+}
+#loading-overlay .loading-fill {
+  height: 100%;
+  background: var(--amber);
+  animation: loadBar 1.5s ease-in-out;
+  width: 100%;
+}
+@keyframes loadBar {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+
+/* Export Modal */
+#export-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+#export-modal.visible { display: flex; }
+#export-modal .modal-content {
+  background: linear-gradient(180deg, #14141c, #0a0a10);
+  border: 1px solid var(--amber);
+  padding: 20px;
+  width: 420px;
+  max-width: 90vw;
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+}
+#export-modal .modal-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  color: var(--amber);
+  margin-bottom: 14px;
+  letter-spacing: 2px;
+}
+
+/* Notification */
+.notification {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background: linear-gradient(180deg, #1a1a24, #0d0d14);
+  border: 1px solid var(--amber);
+  padding: 8px 18px;
+  font-size: 10px;
+  color: var(--amber);
+  z-index: 200;
+  transition: transform 0.3s;
+  box-shadow: 0 0 15px rgba(255,136,0,0.2);
+  letter-spacing: 1px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.notification.show { transform: translateX(-50%) translateY(0); }
+
+/* Warning stripes decoration */
+.warning-stripe {
+  height: 4px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--amber),
+    var(--amber) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  opacity: 0.3;
+  margin: 6px 0;
+}
+
+@media (max-width: 1000px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto 80px; }
+  #left-panel, #right-panel { max-height: 200px; }
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="logo">NEON RUINS</div>
+  <div class="subtitle">Cyberpunk Visualizer Engine v2.0</div>
+  <div class="loading-bar"><div class="loading-fill"></div></div>
+</div>
+
+<div id="app">
+  <!-- Left Panel -->
+  <div id="left-panel" class="panel">
+    <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+    <div class="panel-inner">
+      
+      <div class="master-intensity">
+        <div class="master-label">◈ MASTER INTENSITY</div>
+        <div class="master-value" id="master-val">75%</div>
+        <input type="range" id="master-intensity" min="0" max="100" value="75" style="width:100%">
+      </div>
+
+      <div class="panel-title">◈ Audio Input</div>
+      <div id="upload-area">
+        <div class="icon">⬡</div>
+        <div class="label">DROP .WAV OR CLICK</div>
+        <input type="file" id="file-input" accept=".wav,audio/*">
+      </div>
+      <div id="file-info" style="font-size:8px;color:var(--text-dim);margin-bottom:8px;"></div>
+
+      <div class="panel-title">◈ Metadata</div>
+      <div class="form-group">
+        <label>Artist</label>
+        <input type="text" id="meta-artist" placeholder="Enter artist...">
+      </div>
+      <div class="form-group">
+        <label>Song Title</label>
+        <input type="text" id="meta-song" placeholder="Enter title...">
+      </div>
+      <div class="form-group">
+        <label>BPM Override</label>
+        <input type="number" id="meta-bpm" placeholder="Auto-detect" min="40" max="300">
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Spectrogram</div>
+      <div class="slider-group">
+        <label>Freq Range <span id="freq-range-val">20-20k</span></label>
+        <input type="range" id="freq-min" min="20" max="5000" value="20">
+        <input type="range" id="freq-max" min="5000" max="22000" value="20000">
+      </div>
+      <div class="form-group">
+        <label>Scale</label>
+        <select id="freq-scale">
+          <option value="log">Logarithmic</option>
+          <option value="linear">Linear</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Palette</label></div>
+      <div class="palette-row">
+        <div class="palette-swatch active" data-palette="neon" style="background:linear-gradient(90deg,#00e5ff,#ff0090)"></div>
+        <div class="palette-swatch" data-palette="fire" style="background:linear-gradient(90deg,#ff4400,#ffaa00)"></div>
+        <div class="palette-swatch" data-palette="matrix" style="background:linear-gradient(90deg,#003300,#39ff14)"></div>
+        <div class="palette-swatch" data-palette="violet" style="background:linear-gradient(90deg,#220044,#8b00ff)"></div>
+        <div class="palette-swatch" data-palette="ice" style="background:linear-gradient(90deg,#001133,#00ccff)"></div>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Cymatics Surface</div>
+      <div class="slider-group">
+        <label>Complexity <span id="cym-complexity-val">4</span></label>
+        <input type="range" id="cym-complexity" min="1" max="12" value="4">
+      </div>
+      <div class="slider-group">
+        <label>Smoothness <span id="cym-smooth-val">70%</span></label>
+        <input type="range" id="cym-smooth" min="0" max="100" value="70">
+      </div>
+      <div class="slider-group">
+        <label>Wave Height <span id="cym-height-val">40%</span></label>
+        <input type="range" id="cym-height" min="0" max="100" value="40">
+      </div>
+      <div class="slider-group">
+        <label>Flow Speed <span id="cym-speed-val">30%</span></label>
+        <input type="range" id="cym-speed" min="0" max="100" value="30">
+      </div>
+      <div class="form-group">
+        <label>Mode</label>
+        <select id="cym-mode">
+          <option value="organic">Organic Waves</option>
+          <option value="chladni">Chladni Patterns</option>
+          <option value="evolving">Evolving Morph</option>
+        </select>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Particles</div>
+      <div class="slider-group">
+        <label>Density <span id="part-density-val">1500</span></label>
+        <input type="range" id="part-density" min="100" max="6000" value="1500" step="100">
+      </div>
+      <div class="slider-group">
+        <label>Speed <span id="part-speed-val">40%</span></label>
+        <input type="range" id="part-speed" min="0" max="100" value="40">
+      </div>
+      <div class="toggle-row">
+        <label>Modal Attraction</label>
+        <div class="toggle active" id="toggle-modal"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Viewport -->
+  <div id="viewport">
+    <canvas id="three-canvas"></canvas>
+    <div id="scanlines"></div>
+    <div id="viewport-overlay">
+      <div id="fps-counter">60 FPS</div>
+      <div id="format-badge">1080×1920 · 9:16</div>
+      <div id="title-overlay">
+        <div class="artist" id="display-artist"></div>
+        <div class="song" id="display-song"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="right-panel" class="panel">
+    <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+    <div class="panel-inner">
+      
+      <div class="panel-title">◈ Spectrum</div>
+      <div id="spectrogram-container">
+        <canvas id="spectrogram-canvas"></canvas>
+      </div>
+
+      <div class="panel-title">◈ Waveform</div>
+      <div id="waveform-container">
+        <canvas id="waveform-canvas"></canvas>
+      </div>
+
+      <div class="panel-title">◈ Analysis</div>
+      <div class="beat-display">
+        <div class="beat-item"><div class="value" id="bpm-display">--</div><div class="label">BPM</div></div>
+        <div class="beat-item"><div class="value" id="beat-count">0</div><div class="label">Beats</div></div>
+        <div class="beat-item"><div class="value" id="rms-display">0.00</div><div class="label">RMS</div></div>
+        <div class="beat-item"><div class="value" id="centroid-display">0</div><div class="label">Centroid</div></div>
+      </div>
+
+      <div class="panel-title">◈ Bands</div>
+      <div class="band-meters">
+        <div class="band-meter"><span class="band-label">Sub</span><div class="band-bar-bg"><div class="band-bar" id="band-sub" style="background:var(--violet)"></div></div></div>
+        <div class="band-meter"><span class="band-label">Bass</span><div class="band-bar-bg"><div class="band-bar" id="band-bass" style="background:var(--magenta)"></div></div></div>
+        <div class="band-meter"><span class="band-label">Lo-Mid</span><div class="band-bar-bg"><div class="band-bar" id="band-lowmid" style="background:#ff4400"></div></div></div>
+        <div class="band-meter"><span class="band-label">Mid</span><div class="band-bar-bg"><div class="band-bar" id="band-mid" style="background:var(--cyan)"></div></div></div>
+        <div class="band-meter"><span class="band-label">Hi-Mid</span><div class="band-bar-bg"><div class="band-bar" id="band-himid" style="background:var(--green)"></div></div></div>
+        <div class="band-meter"><span class="band-label">Treble</span><div class="band-bar-bg"><div class="band-bar" id="band-treble" style="background:#ffff00"></div></div></div>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Environment</div>
+      <div class="toggle-row"><label>Volumetric Fog</label><div class="toggle active" id="toggle-volfog"></div></div>
+      <div class="toggle-row"><label>City Lights React</label><div class="toggle active" id="toggle-cityreact"></div></div>
+      <div class="slider-group">
+        <label>Fog Density <span id="fog-density-val">50%</span></label>
+        <input type="range" id="fog-density" min="0" max="100" value="50">
+      </div>
+      <div class="slider-group">
+        <label>City Reactivity <span id="city-react-val">70%</span></label>
+        <input type="range" id="city-react" min="0" max="100" value="70">
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Camera</div>
+      <div class="form-group">
+        <label>Preset</label>
+        <select id="camera-preset">
+          <option value="orbit">Orbit</option>
+          <option value="push">Beat Push</option>
+          <option value="topdown">Top Down</option>
+          <option value="dramatic">Dramatic</option>
+          <option value="flyover">City Flyover</option>
+        </select>
+      </div>
+      <div class="slider-group">
+        <label>FOV <span id="fov-val">60°</span></label>
+        <input type="range" id="camera-fov" min="30" max="120" value="60">
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Presets</div>
+      <div class="preset-list">
+        <div class="preset-item active" data-preset="default">◈ Neon Ruins</div>
+        <div class="preset-item" data-preset="cyberpunk">◈ Cyberpunk Pulse</div>
+        <div class="preset-item" data-preset="minimal">◈ Minimal Wave</div>
+        <div class="preset-item" data-preset="intense">◈ Max Overload</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="save-preset-btn">Save</button>
+        <button class="btn" id="load-preset-btn">Load</button>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="panel-title">◈ Export</div>
+      <div class="btn-row">
+        <button class="btn btn-danger" id="export-ae-btn">AE Manifest</button>
+        <button class="btn" id="export-frame-btn">Capture</button>
+      </div>
+      <div class="form-group">
+        <label>Output FPS</label>
+        <select id="export-fps">
+          <option value="30">30 fps</option>
+          <option value="60" selected>60 fps</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Bar -->
+  <div id="bottom-bar">
+    <div class="rivet tl" style="top:4px;left:4px;"></div>
+    <div class="rivet tr" style="top:4px;right:4px;"></div>
+    <div class="rivet bl" style="bottom:4px;left:4px;"></div>
+    <div class="rivet br" style="bottom:4px;right:4px;"></div>
+    <div id="play-btn">▶</div>
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <div id="time-display">0:00 / 0:00</div>
+    <button class="btn" id="loop-btn">⟳ Loop</button>
+    <button class="btn" id="mic-btn">🎤 Mic</button>
+  </div>
+</div>
+
+<div id="export-modal">
+  <div class="modal-content">
+    <div class="modal-title">◈ AE EXPORT MANIFEST</div>
+    <textarea id="ae-json-output" style="width:100%;height:200px;background:#08080c;border:1px solid var(--metal-highlight);color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:10px;padding:8px;resize:none;"></textarea>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="btn btn-primary" id="copy-ae-btn">Copy</button>
+      <button class="btn" id="download-ae-btn">Download</button>
+      <button class="btn" id="close-modal-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+const APP = {
+  audioCtx: null, analyser: null, source: null, audioBuffer: null,
+  isPlaying: false, startTime: 0, pauseTime: 0, loopEnabled: false, useMic: false,
+  fftSize: 2048, frequencyData: null, timeDomainData: null,
+  bands: { sub: 0, bass: 0, lowmid: 0, mid: 0, himid: 0, treble: 0 },
+  rms: 0, spectralCentroid: 0, prevSpectrum: null,
+  beatCount: 0, detectedBPM: 0, beatTimes: [], lastBeatTime: 0,
+  beatThreshold: 1.3, beatEnergyAvg: 0,
+  spectrogramData: [],
+  scene: null, camera: null, renderer: null,
+  cymaticMesh: null, particleSystem: null,
+  neonLights: [], volumetricFog: [], cityBuildings: [],
+  clock: null,
+  settings: {
+    masterIntensity: 0.75,
+    freqMin: 20, freqMax: 20000, freqScale: 'log', palette: 'neon',
+    cymComplexity: 4, cymSmooth: 0.7, cymHeight: 0.4, cymSpeed: 0.3, cymMode: 'organic',
+    particleDensity: 1500, particleSpeed: 0.4, modalAttraction: true,
+    volfog: true, cityReact: true, fogDensity: 0.5, cityReactivity: 0.7,
+    cameraPreset: 'orbit', fov: 60, fps: 60
+  }
+};
+
+const PALETTES = {
+  neon: [[0,0,0],[0,20,40],[0,100,180],[0,229,255],[180,0,255],[255,0,144],[255,100,200],[255,255,255]],
+  fire: [[0,0,0],[40,0,0],[180,30,0],[255,100,0],[255,180,0],[255,255,50],[255,255,200],[255,255,255]],
+  matrix: [[0,0,0],[0,20,0],[0,80,0],[0,180,20],[57,255,20],[120,255,80],[200,255,180],[255,255,255]],
+  violet: [[0,0,0],[20,0,40],[60,0,120],[139,0,255],[180,50,255],[220,120,255],[240,180,255],[255,255,255]],
+  ice: [[0,0,0],[0,10,30],[0,40,100],[0,120,200],[0,200,255],[100,230,255],[180,245,255],[255,255,255]]
+};
+
+function init() {
+  initAudio();
+  initThreeJS();
+  initUI();
+  initSpectrogram();
+  setTimeout(() => document.getElementById('loading-overlay').classList.add('hidden'), 1800);
+  animate();
+}
+
+function initAudio() {
+  APP.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  APP.analyser = APP.audioCtx.createAnalyser();
+  APP.analyser.fftSize = APP.fftSize;
+  APP.analyser.smoothingTimeConstant = 0.75;
+  APP.analyser.connect(APP.audioCtx.destination);
+  APP.frequencyData = new Uint8Array(APP.analyser.frequencyBinCount);
+  APP.timeDomainData = new Uint8Array(APP.analyser.frequencyBinCount);
+  APP.prevSpectrum = new Float32Array(APP.analyser.frequencyBinCount);
+}
+
+function createConcreteTexture(size, type) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  
+  if (type === 'color') {
+    ctx.fillStyle = '#1a1a24';
+    ctx.fillRect(0, 0, size, size);
+    const imgData = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 35;
+      imgData.data[i] = Math.max(0, Math.min(255, imgData.data[i] + n));
+      imgData.data[i+1] = Math.max(0, Math.min(255, imgData.data[i+1] + n));
+      imgData.data[i+2] = Math.max(0, Math.min(255, imgData.data[i+2] + n + 3));
+    }
+    ctx.putImageData(imgData, 0, 0);
+    for (let i = 0; i < 6; i++) {
+      ctx.strokeStyle = `rgba(${10+Math.random()*20},${10+Math.random()*15},${15+Math.random()*20},${0.3+Math.random()*0.3})`;
+      ctx.lineWidth = 0.5 + Math.random() * 2;
+      ctx.beginPath();
+      let x = Math.random() * size, y = Math.random() * size;
+      ctx.moveTo(x, y);
+      for (let j = 0; j < 4; j++) { x += (Math.random()-0.5)*size*0.3; y += (Math.random()-0.5)*size*0.3; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    for (let i = 0; i < 4; i++) {
+      ctx.strokeStyle = `rgba(${80+Math.random()*40},${30+Math.random()*20},${10+Math.random()*15},${0.1+Math.random()*0.15})`;
+      ctx.lineWidth = 1 + Math.random() * 3;
+      ctx.beginPath();
+      let x = Math.random() * size, y = 0;
+      ctx.moveTo(x, y);
+      while (y < size) { x += (Math.random()-0.5)*8; y += 5+Math.random()*10; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, size, size);
+    const imgData = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      const v = 128 + (Math.random()-0.5)*70;
+      imgData.data[i] = v; imgData.data[i+1] = v; imgData.data[i+2] = v;
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function createWindowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, 128, 256);
+  
+  const cols = 6, rows = 16;
+  const ww = 128 / cols, wh = 256 / rows;
+  
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const lit = Math.random() > 0.4;
+      if (lit) {
+        const colors = ['#00e5ff', '#ff0090', '#ff8800', '#39ff14', '#8b00ff', '#ffffff'];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const brightness = 0.3 + Math.random() * 0.7;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = brightness;
+        ctx.fillRect(c * ww + 2, r * wh + 2, ww - 4, wh - 4);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function initThreeJS() {
+  const viewport = document.getElementById('viewport');
+  const canvas = document.getElementById('three-canvas');
+  
+  APP.scene = new THREE.Scene();
+  APP.scene.fog = new THREE.FogExp2(0x050510, 0.012);
+  
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  APP.camera = new THREE.PerspectiveCamera(APP.settings.fov, w / h, 0.1, 300);
+  APP.camera.position.set(0, 10, 20);
+  APP.camera.lookAt(0, 0, 0);
+  
+  APP.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  APP.renderer.setSize(w, h);
+  APP.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  APP.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  APP.renderer.toneMappingExposure = 1.0;
+  
+  APP.clock = new THREE.Clock();
+  
+  APP.scene.add(new THREE.AmbientLight(0x111122, 0.3));
+  
+  createCymaticPlate();
+  createParticleSystem();
+  createCyberpunkCity();
+  createNeonLights();
+  createVolumetricFog();
+  createGround();
+  
+  window.addEventListener('resize', onResize);
+}
+
+function createCymaticPlate() {
+  const segments = 180;
+  const size = 80;
+  const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+  
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uBass: { value: 0 }, uMid: { value: 0 }, uTreble: { value: 0 }, uSub: { value: 0 },
+      uIntensity: { value: 0.75 },
+      uComplexity: { value: 4 },
+      uSmoothness: { value: 0.7 },
+      uHeight: { value: 0.4 },
+      uSpeed: { value: 0.3 },
+      uMode: { value: 0 },
+      uColor1: { value: new THREE.Color(0x00e5ff) },
+      uColor2: { value: new THREE.Color(0xff0090) },
+      uColor3: { value: new THREE.Color(0x39ff14) },
+      uBeat: { value: 0 }
+    },
+    vertexShader: `
+      uniform float uTime, uBass, uMid, uTreble, uSub;
+      uniform float uIntensity, uComplexity, uSmoothness, uHeight, uSpeed;
+      uniform float uMode, uBeat;
+      
+      varying vec2 vUv;
+      varying float vDisplacement;
+      varying vec3 vNormal;
+      varying vec3 vWorldPos;
+      
+      // Smooth noise
+      vec2 hash2(vec2 p) {
+        p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+        return fract(sin(p) * 43758.5453);
+      }
+      
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = dot(hash2(i), vec2(1.0));
+        float b = dot(hash2(i + vec2(1.0,0.0)), vec2(1.0));
+        float c = dot(hash2(i + vec2(0.0,1.0)), vec2(1.0));
+        float d = dot(hash2(i + vec2(1.0,1.0)), vec2(1.0));
+        return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+      }
+      
+      float fbm(vec2 p, float octaves) {
+        float v = 0.0, a = 0.5;
+        for(int i = 0; i < 8; i++) {
+          if(float(i) >= octaves) break;
+          v += a * noise(p);
+          p *= 2.0;
+          a *= 0.5;
+        }
+        return v;
+      }
+      
+      void main() {
+        vUv = uv;
+        vec3 pos = position;
+        vec2 p = (uv - 0.5) * 2.0;
+        float dist = length(p);
+        float t = uTime * uSpeed;
+        
+        float disp = 0.0;
+        
+        if (uMode < 0.5) {
+          // Organic waves - smooth, flowing
+          float n1 = fbm(p * 2.0 + t * 0.5, uComplexity);
+          float n2 = fbm(p * 3.0 - t * 0.3 + 10.0, uComplexity * 0.7);
+          float n3 = fbm(p * 1.5 + vec2(t * 0.2, -t * 0.4), uComplexity * 0.5);
+          
+          disp = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+          disp = pow(disp, 1.0 + (1.0 - uSmoothness) * 3.0);
+          
+          // Audio modulation - subtle
+          disp += sin(p.x * 3.0 + t) * sin(p.y * 3.0 - t * 0.7) * uMid * 0.3;
+          disp += sin(dist * 4.0 - t * 2.0) * uBass * 0.2 * exp(-dist * 0.3);
+          
+          // Beat ripple - very smooth
+          disp += sin(dist * 6.0 - uTime * 4.0) * uBeat * 0.3 * exp(-dist * 0.8);
+          
+        } else if (uMode < 1.5) {
+          // Chladni - softer version
+          float phase = t * 0.15;
+          float n = floor(mod(phase, 6.0)) + 1.0;
+          float m = floor(mod(phase * 1.3, 6.0)) + 2.0;
+          float blend = smoothstep(0.0, 1.0, fract(phase));
+          
+          float n2 = floor(mod(phase + 1.0, 6.0)) + 1.0;
+          float m2 = floor(mod(phase * 1.3 + 1.0, 6.0)) + 2.0;
+          
+          float p1 = cos(n*3.14159*p.x)*cos(m*3.14159*p.y) - cos(m*3.14159*p.x)*cos(n*3.14159*p.y);
+          float p2 = cos(n2*3.14159*p.x)*cos(m2*3.14159*p.y) - cos(m2*3.14159*p.x)*cos(n2*3.14159*p.y);
+          
+          float pattern = mix(p1, p2, blend);
+          disp = pattern * 0.5 + 0.5;
+          disp = pow(disp, 1.0 + (1.0 - uSmoothness) * 2.0);
+          
+          disp += uMid * 0.2 * sin(dist * 3.0 - t);
+          disp += uBeat * 0.2 * exp(-dist * 1.5);
+          
+        } else {
+          // Evolving morph
+          float phase1 = t * 0.12;
+          float phase2 = t * 0.08;
+          
+          float n = 2.0 + sin(phase1) * 2.0 + uBass;
+          float m = 3.0 + cos(phase2) * 2.0 + uMid;
+          
+          float rotAngle = t * 0.05;
+          vec2 rp = vec2(p.x*cos(rotAngle)-p.y*sin(rotAngle), p.x*sin(rotAngle)+p.y*cos(rotAngle));
+          
+          float pattern = cos(n*3.14159*rp.x)*cos(m*3.14159*rp.y);
+          
+          float n2 = fbm(rp * 2.0 + t * 0.3, 4.0);
+          disp = mix(pattern * 0.5 + 0.5, n2, 0.5 + 0.5 * sin(t * 0.2));
+          disp = pow(disp, 1.0 + (1.0 - uSmoothness) * 2.0);
+          
+          disp += uBeat * 0.25 * sin(dist * 5.0 - uTime * 3.0) * exp(-dist);
+        }
+        
+        disp *= uHeight * uIntensity;
+        pos.z += disp;
+        
+        vDisplacement = disp;
+        vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
+        
+        // Smooth normal approximation
+        float eps = 0.01;
+        vec2 pR = (uv + vec2(eps, 0.0) - 0.5) * 2.0;
+        vec2 pU = (uv + vec2(0.0, eps) - 0.5) * 2.0;
+        float dxDisp = fbm(pR * 2.0 + t * 0.5, uComplexity) - fbm((uv-vec2(eps,0.0)-0.5)*2.0*vec2(1.0) + t*0.5, uComplexity);
+        float dyDisp = fbm(pU * 2.0 + t * 0.5, uComplexity) - fbm((uv-vec2(0.0,eps)-0.5)*2.0*vec2(1.0) + t*0.5, uComplexity);
+        vNormal = normalize(vec3(-dxDisp * uHeight * 5.0, -dyDisp * uHeight * 5.0, 1.0));
+        
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime, uBass, uMid, uTreble, uBeat;
+      uniform vec3 uColor1, uColor2, uColor3;
+      uniform float uSmoothness;
+      
+      varying vec2 vUv;
+      varying float vDisplacement;
+      varying vec3 vNormal;
+      varying vec3 vWorldPos;
+      
+      void main() {
+        float d = vDisplacement;
+        
+        // Smooth color gradient
+        vec3 col = vec3(0.01, 0.01, 0.03);
+        col = mix(col, uColor1 * 0.2, smoothstep(0.0, 0.2, d));
+        col = mix(col, uColor1 * 0.6, smoothstep(0.2, 0.4, d));
+        col = mix(col, uColor2 * 0.7, smoothstep(0.4, 0.65, d));
+        col = mix(col, uColor3 * 0.5, smoothstep(0.65, 0.9, d));
+        
+        // Soft glow at peaks
+        float peak = smoothstep(0.5, 1.0, d);
+        col += uColor1 * peak * 0.3;
+        
+        // Rim lighting
+        float rim = 1.0 - max(0.0, dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)));
+        rim = pow(rim, 3.0);
+        col += uColor1 * rim * 0.4 * (1.0 + uBeat * 0.3);
+        
+        // Beat flash - very subtle
+        col += vec3(1.0) * uBeat * 0.05 * d;
+        
+        // Edge fade
+        float edgeDist = length(vUv - 0.5) * 2.0;
+        float edgeFade = 1.0 - smoothstep(0.5, 1.0, edgeDist);
+        col *= edgeFade * 0.7 + 0.3;
+        
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+    side: THREE.DoubleSide
+  });
+  
+  APP.cymaticMesh = new THREE.Mesh(geometry, material);
+  APP.cymaticMesh.rotation.x = -Math.PI / 2;
+  APP.cymaticMesh.position.y = -0.5;
+  APP.scene.add(APP.cymaticMesh);
+}
+
+function createParticleSystem() {
+  const count = APP.settings.particleDensity;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const r = 3 + Math.random() * 20;
+    positions[i*3] = Math.cos(theta) * r;
+    positions[i*3+1] = 0.5 + Math.random() * 10;
+    positions[i*3+2] = Math.sin(theta) * r;
+    
+    velocities[i*3] = (Math.random()-0.5)*0.015;
+    velocities[i*3+1] = (Math.random()-0.5)*0.01;
+    velocities[i*3+2] = (Math.random()-0.5)*0.015;
+    
+    const c = Math.random();
+    if (c < 0.33) { colors[i*3]=0; colors[i*3+1]=0.9; colors[i*3+2]=1; }
+    else if (c < 0.66) { colors[i*3]=1; colors[i*3+1]=0; colors[i*3+2]=0.56; }
+    else { colors[i*3]=0.22; colors[i*3+1]=1; colors[i*3+2]=0.08; }
+    
+    sizes[i] = 0.02 + Math.random() * 0.05;
+  }
+  
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uBeat: { value: 0 },
+      uPixelRatio: { value: APP.renderer.getPixelRatio() }
+    },
+    vertexShader: `
+      attribute float size;
+      attribute vec3 color;
+      uniform float uTime, uBass, uMid, uBeat, uPixelRatio;
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        vColor = color;
+        vec3 pos = position;
+        pos.y += sin(uTime * 0.5 + pos.x * 0.3) * uBass * 0.5;
+        pos.x += sin(uTime * 0.3 + pos.z * 0.2) * uMid * 0.3;
+        pos *= 1.0 + uBeat * 0.05;
+        vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+        gl_PointSize = size * 150.0 * uPixelRatio * (1.0 + uBeat * 0.3) / -mv.z;
+        gl_Position = projectionMatrix * mv;
+        vAlpha = smoothstep(80.0, 5.0, -mv.z) * (0.4 + uBeat * 0.3);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if(d > 0.5) discard;
+        float alpha = smoothstep(0.5, 0.0, d) * vAlpha;
+        gl_FragColor = vec4(vColor * (1.0 + smoothstep(0.3, 0.0, d) * 0.5), alpha);
+      }
+    `,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+  });
+  
+  APP.particleSystem = new THREE.Points(geometry, material);
+  APP.particleSystem._velocities = velocities;
+  APP.scene.add(APP.particleSystem);
+}
+
+function createCyberpunkCity() {
+  const concreteColor = createConcreteTexture(512, 'color');
+  const concreteBump = createConcreteTexture(512, 'bump');
+  const windowTex = createWindowTexture();
+  
+  const buildingGroup = new THREE.Group();
+  
+  // Create buildings in rings around the center
+  const rings = [
+    { radius: 25, count: 16, minH: 8, maxH: 25, minW: 2, maxW: 5 },
+    { radius: 35, count: 20, minH: 12, maxH: 40, minW: 3, maxW: 7 },
+    { radius: 48, count: 24, minH: 15, maxH: 55, minW: 3, maxW: 8 },
+    { radius: 65, count: 20, minH: 20, maxH: 60, minW: 4, maxW: 10 }
+  ];
+  
+  rings.forEach((ring, ringIdx) => {
+    for (let i = 0; i < ring.count; i++) {
+      const angle = (i / ring.count) * Math.PI * 2 + (ringIdx * 0.15);
+      const radius = ring.radius + (Math.random() - 0.5) * 6;
+      const height = ring.minH + Math.random() * (ring.maxH - ring.minH);
+      const width = ring.minW + Math.random() * (ring.maxW - ring.minW);
+      const depth = ring.minW + Math.random() * (ring.maxW - ring.minW);
+      
+      // Building body
+      const buildGeo = new THREE.BoxGeometry(width, height, depth);
+      
+      // Create unique window texture for each building
+      const bWindowTex = createWindowTexture();
+      
+      const buildMat = new THREE.MeshStandardMaterial({
+        map: concreteColor,
+        bumpMap: concreteBump,
+        bumpScale: 0.3,
+        roughness: 0.85,
+        metalness: 0.15,
+        color: new THREE.Color().setHSL(0.6 + Math.random() * 0.1, 0.1, 0.08 + Math.random() * 0.05),
+        emissiveMap: bWindowTex,
+        emissive: new THREE.Color(0xffffff),
+        emissiveIntensity: 0.5 + Math.random() * 0.5
+      });
+      
+      const building = new THREE.Mesh(buildGeo, buildMat);
+      building.position.set(
+        Math.cos(angle) * radius,
+        height / 2 - 1,
+        Math.sin(angle) * radius
+      );
+      building.rotation.y = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+      
+      building.userData = {
+        baseEmissive: buildMat.emissiveIntensity,
+        baseY: building.position.y,
+        angle: angle,
+        radius: radius,
+        phase: Math.random() * Math.PI * 2
+      };
+      
+      buildingGroup.add(building);
+      APP.cityBuildings.push(building);
+      
+      // Add antenna/spire to tall buildings
+      if (height > 25 && Math.random() > 0.4) {
+        const spireH = 3 + Math.random() * 6;
+        const spireGeo = new THREE.CylinderGeometry(0.05, 0.15, spireH, 4);
+        const spireMat = new THREE.MeshStandardMaterial({
+          color: 0x333344,
+          metalness: 0.8,
+          roughness: 0.3,
+          emissive: 0xff0044,
+          emissiveIntensity: 0.3
+        });
+        const spire = new THREE.Mesh(spireGeo, spireMat);
+        spire.position.set(
+          building.position.x,
+          height - 1 + spireH / 2,
+          building.position.z
+        );
+        buildingGroup.add(spire);
+        
+        // Blinking light on top
+        const lightGeo = new THREE.SphereGeometry(0.15, 8, 8);
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0044 });
+        const lightMesh = new THREE.Mesh(lightGeo, lightMat);
+        lightMesh.position.set(
+          building.position.x,
+          height - 1 + spireH,
+          building.position.z
+        );
+        lightMesh.userData = { blinkPhase: Math.random() * Math.PI * 2 };
+        buildingGroup.add(lightMesh);
+        APP.cityBuildings.push(lightMesh);
+      }
+      
+      // Neon signs on some buildings
+      if (Math.random() > 0.6 && ringIdx < 3) {
+        const signColors = [0x00e5ff, 0xff0090, 0xff8800, 0x39ff14, 0x8b00ff];
+        const signColor = signColors[Math.floor(Math.random() * signColors.length)];
+        const signGeo = new THREE.PlaneGeometry(width * 0.6, 1 + Math.random() * 2);
+        const signMat = new THREE.MeshBasicMaterial({
+          color: signColor,
+          transparent: true,
+          opacity: 0.8,
+          side: THREE.DoubleSide
+        });
+        const sign = new THREE.Mesh(signGeo, signMat);
+        const signAngle = angle + Math.PI;
+        sign.position.set(
+          Math.cos(angle) * (radius - width/2 - 0.1),
+          height * 0.3 + Math.random() * height * 0.3,
+          Math.sin(angle) * (radius - width/2 - 0.1)
+        );
+        sign.rotation.y = angle + Math.PI;
+        sign.userData = { baseColor: signColor, phase: Math.random() * Math.PI * 2 };
+        buildingGroup.add(sign);
+        APP.cityBuildings.push(sign);
+      }
+    }
+  });
+  
+  APP.scene.add(buildingGroup);
+}
+
+function createNeonLights() {
+  const neonColors = [0x00e5ff, 0xff0090, 0x39ff14, 0x8b00ff, 0xff8800];
+  
+  for (let i = 0; i < 12; i++) {
+    const color = neonColors[i % neonColors.length];
+    const light = new THREE.PointLight(color, 4, 25);
+    const angle = (i / 12) * Math.PI * 2;
+    const radius = 12 + Math.random() * 15;
+    light.position.set(
+      Math.cos(angle) * radius,
+      2 + Math.random() * 8,
+      Math.sin(angle) * radius
+    );
+    APP.scene.add(light);
+    APP.neonLights.push({ light, baseIntensity: 4, color, basePos: light.position.clone(), phase: Math.random() * Math.PI * 2 });
+  }
+  
+  const dir1 = new THREE.DirectionalLight(0x00e5ff, 0.2);
+  dir1.position.set(15, 15, 10);
+  APP.scene.add(dir1);
+  
+  const dir2 = new THREE.DirectionalLight(0xff0090, 0.15);
+  dir2.position.set(-15, 12, -10);
+  APP.scene.add(dir2);
+}
+
+function createVolumetricFog() {
+  const fogShaderMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 }, uColor: { value: new THREE.Color(0x00e5ff) },
+      uOpacity: { value: 0.12 }, uDensity: { value: 0.5 }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime, uOpacity, uDensity;
+      uniform vec3 uColor;
+      varying vec2 vUv;
+      
+      vec3 hash3(vec2 p) {
+        vec3 q = vec3(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)),dot(p,vec2(419.2,371.9)));
+        return fract(sin(q)*43758.5453);
+      }
+      float noise(vec2 p) {
+        vec2 i=floor(p),f=fract(p);
+        f=f*f*(3.0-2.0*f);
+        return mix(mix(dot(hash3(i),vec2(1.0)),dot(hash3(i+vec2(1,0)),vec2(1.0)),f.x),
+                   mix(dot(hash3(i+vec2(0,1)),vec2(1.0)),dot(hash3(i+vec2(1,1)),vec2(1.0)),f.x),f.y);
+      }
+      float fbm(vec2 p) {
+        float v=0.0,a=0.5;
+        for(int i=0;i<5;i++){v+=a*noise(p);p*=2.0;a*=0.5;}
+        return v;
+      }
+      
+      void main() {
+        vec2 uv = vUv * 3.0;
+        float n = fbm(uv + uTime * 0.04);
+        float n2 = fbm(uv * 1.5 - uTime * 0.025 + 10.0);
+        float dist = length(vUv - 0.5) * 2.0;
+        float radial = 1.0 - smoothstep(0.2, 1.0, dist);
+        float vert = smoothstep(0.0, 0.4, vUv.y) * (1.0 - smoothstep(0.6, 1.0, vUv.y));
+        float alpha = n * n2 * radial * vert * uOpacity * uDensity;
+        vec3 col = uColor * (0.5 + n * 0.5) + vec3(0.1, 0.0, 0.15) * n2;
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending
+  });
+  
+  const fogColors = [0x00e5ff, 0xff0090, 0x8b00ff, 0x39ff14];
+  for (let layer = 0; layer < 4; layer++) {
+    const fogMat = fogShaderMat.clone();
+    fogMat.uniforms.uColor.value = new THREE.Color(fogColors[layer]);
+    fogMat.uniforms.uOpacity.value = 0.06 + layer * 0.015;
+    const fogPlane = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), fogMat);
+    fogPlane.rotation.x = -Math.PI / 2;
+    fogPlane.position.y = 0.5 + layer * 2;
+    APP.scene.add(fogPlane);
+    APP.volumetricFog.push(fogPlane);
+  }
+}
+
+function createGround() {
+  const groundGeo = new THREE.PlaneGeometry(200, 200);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x080810,
+    roughness: 0.95,
+    metalness: 0.05
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -1.01;
+  APP.scene.add(ground);
+}
+
+function initSpectrogram() {
+  const canvas = document.getElementById('spectrogram-canvas');
+  const container = document.getElementById('spectrogram-container');
+  canvas.width = container.clientWidth * 2;
+  canvas.height = container.clientHeight * 2;
+  for (let i = 0; i < canvas.width; i++) {
+    APP.spectrogramData.push(new Uint8Array(APP.analyser.frequencyBinCount));
+  }
+}
+
+function analyzeAudio() {
+  if (!APP.analyser) return;
+  APP.analyser.getByteFrequencyData(APP.frequencyData);
+  APP.analyser.getByteTimeDomainData(APP.timeDomainData);
+  
+  const binCount = APP.analyser.frequencyBinCount;
+  const binWidth = APP.audioCtx.sampleRate / APP.fftSize;
+  
+  const bandRanges = { sub:[20,60], bass:[60,250], lowmid:[250,500], mid:[500,2000], himid:[2000,6000], treble:[6000,20000] };
+  for (const [band,[low,high]] of Object.entries(bandRanges)) {
+    const s = Math.floor(low/binWidth), e = Math.min(Math.floor(high/binWidth), binCount-1);
+    let sum=0, cnt=0;
+    for(let i=s;i<=e;i++){sum+=APP.frequencyData[i];cnt++;}
+    APP.bands[band] = cnt>0 ? (sum/cnt)/255 : 0;
+  }
+  
+  let rmsSum=0;
+  for(let i=0;i<binCount;i++){const v=APP.timeDomainData[i]/128-1;rmsSum+=v*v;}
+  APP.rms = Math.sqrt(rmsSum/binCount);
+  
+  let wSum=0, tE=0;
+  for(let i=0;i<binCount;i++){const f=i*binWidth;wSum+=f*APP.frequencyData[i];tE+=APP.frequencyData[i];}
+  APP.spectralCentroid = tE>0 ? wSum/tE : 0;
+  
+  for(let i=0;i<binCount;i++) APP.prevSpectrum[i] = APP.frequencyData[i]/255;
+  
+  const bassE = APP.bands.sub*0.5 + APP.bands.bass*0.5;
+  APP.beatEnergyAvg = APP.beatEnergyAvg*0.95 + bassE*0.05;
+  const ct = getCurrentTime();
+  if(bassE > APP.beatEnergyAvg*APP.beatThreshold && ct-APP.lastBeatTime > 0.2) {
+    APP.beatCount++; APP.lastBeatTime = ct; APP.beatTimes.push(ct);
+    if(APP.beatTimes.length>4) {
+      const rb = APP.beatTimes.slice(-8);
+      let ivs=[];
+      for(let i=1;i<rb.length;i++) ivs.push(rb[i]-rb[i-1]);
+      const avg = ivs.reduce((a,b)=>a+b,0)/ivs.length;
+      APP.detectedBPM = Math.round(60/avg);
+      if(APP.detectedBPM>200) APP.detectedBPM=Math.round(APP.detectedBPM/2);
+      if(APP.detectedBPM<50) APP.detectedBPM=Math.round(APP.detectedBPM*2);
+    }
+  }
+  updateSpectrogram();
+}
+
+function updateSpectrogram() {
+  APP.spectrogramData.shift();
+  APP.spectrogramData.push(new Uint8Array(APP.frequencyData));
+  const canvas = document.getElementById('spectrogram-canvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = 'rgba(0,0,0,0.95)';
+  ctx.fillRect(0,0,w,h);
+  const palette = PALETTES[APP.settings.palette];
+  const binCount = APP.analyser.frequencyBinCount;
+  for(let x=0;x<w;x++) {
+    const di = Math.floor((x/w)*APP.spectrogramData.length);
+    const data = APP.spectrogramData[di];
+    if(!data) continue;
+    for(let y=0;y<h;y++) {
+      const ny = 1-(y/h);
+      const bi = APP.settings.freqScale==='log' ? Math.floor(Math.pow(ny,2)*binCount) : Math.floor(ny*binCount);
+      const val = data[Math.min(bi,binCount-1)]/255;
+      const pi = val*(palette.length-1);
+      const i0 = Math.floor(pi), i1 = Math.min(i0+1,palette.length-1);
+      const t = pi-i0;
+      ctx.fillStyle = `rgb(${Math.floor(palette[i0][0]*(1-t)+palette[i1][0]*t)},${Math.floor(palette[i0][1]*(1-t)+palette[i1][1]*t)},${Math.floor(palette[i0][2]*(1-t)+palette[i1][2]*t)})`;
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+}
+
+function updateWaveform() {
+  const canvas = document.getElementById('waveform-canvas');
+  const container = document.getElementById('waveform-container');
+  if(canvas.width!==container.clientWidth*2){canvas.width=container.clientWidth*2;canvas.height=container.clientHeight*2;}
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = 'rgba(0,0,0,0.9)';
+  ctx.fillRect(0,0,w,h);
+  if(APP.audioBuffer) {
+    const data = APP.audioBuffer.getChannelData(0);
+    const step = Math.floor(data.length/w);
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let x=0;x<w;x++){let min=1,max=-1;for(let j=0;j<step;j++){const v=data[x*step+j]||0;if(v<min)min=v;if(v>max)max=v;}ctx.moveTo(x,(1+min)*h/2);ctx.lineTo(x,(1+max)*h/2);}
+    ctx.stroke();
+    if(APP.isPlaying||APP.pauseTime>0){const p=getCurrentTime()/APP.audioBuffer.duration;ctx.strokeStyle='#ff0090';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p*w,0);ctx.lineTo(p*w,h);ctx.stroke();}
+  }
+}
+
+let beatPulse = 0, frameCount = 0, lastFPSTime = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = APP.clock.getDelta();
+  const elapsed = APP.clock.getElapsedTime();
+  
+  frameCount++;
+  if(elapsed-lastFPSTime>=1){document.getElementById('fps-counter').textContent=frameCount+' FPS';frameCount=0;lastFPSTime=elapsed;}
+  
+  if(APP.isPlaying||APP.useMic) analyzeAudio();
+  
+  const tsb = getCurrentTime()-APP.lastBeatTime;
+  beatPulse = Math.max(0, 1-tsb*4);
+  
+  updateScene(elapsed, delta);
+  updateUI();
+  APP.renderer.render(APP.scene, APP.camera);
+}
+
+function updateScene(time, delta) {
+  const mi = APP.settings.masterIntensity;
+  const bass = APP.bands.bass * mi;
+  const mid = APP.bands.mid * mi;
+  const treble = APP.bands.treble * mi;
+  const sub = APP.bands.sub * mi;
+  const cr = APP.settings.cityReactivity;
+  
+  // Cymatic plate
+  if(APP.cymaticMesh) {
+    const u = APP.cymaticMesh.material.uniforms;
+    u.uTime.value = time;
+    u.uBass.value += (bass - u.uBass.value) * 0.12;
+    u.uMid.value += (mid - u.uMid.value) * 0.12;
+    u.uTreble.value += (treble - u.uTreble.value) * 0.15;
+    u.uSub.value += (sub - u.uSub.value) * 0.1;
+    u.uIntensity.value = mi;
+    u.uComplexity.value = APP.settings.cymComplexity;
+    u.uSmoothness.value = APP.settings.cymSmooth;
+    u.uHeight.value = APP.settings.cymHeight;
+    u.uSpeed.value = APP.settings.cymSpeed;
+    u.uBeat.value += (beatPulse * mi - u.uBeat.value) * 0.25;
+    const modeMap = { organic:0, chladni:1, evolving:2 };
+    u.uMode.value = modeMap[APP.settings.cymMode] || 0;
+  }
+  
+  // Particles
+  if(APP.particleSystem) {
+    const u = APP.particleSystem.material.uniforms;
+    u.uTime.value = time;
+    u.uBass.value += (bass - u.uBass.value) * 0.1;
+    u.uMid.value += (mid - u.uMid.value) * 0.1;
+    u.uBeat.value += (beatPulse * mi - u.uBeat.value) * 0.25;
+    
+    const pos = APP.particleSystem.geometry.attributes.position.array;
+    const vel = APP.particleSystem._velocities;
+    const cnt = pos.length/3;
+    const spd = APP.settings.particleSpeed * mi;
+    
+    for(let i=0;i<cnt;i++){
+      const idx=i*3;
+      pos[idx]+=vel[idx]*spd*(1+bass*1.5);
+      pos[idx+1]+=vel[idx+1]*spd*(1+mid*0.5);
+      pos[idx+2]+=vel[idx+2]*spd*(1+bass*1.5);
+      const dist=Math.sqrt(pos[idx]**2+pos[idx+2]**2);
+      if(dist>30||pos[idx+1]>15||pos[idx+1]<-1){
+        const a=Math.random()*Math.PI*2, r=3+Math.random()*15;
+        pos[idx]=Math.cos(a)*r; pos[idx+1]=0.5+Math.random()*8; pos[idx+2]=Math.sin(a)*r;
+      }
+      if(APP.settings.modalAttraction&&mid>0.1){
+        const mx=Math.sin(time*1.5+i*0.008)*4*mid;
+        const mz=Math.cos(time*1.5+i*0.008)*4*mid;
+        pos[idx]+=(mx-pos[idx])*0.0008*mid;
+        pos[idx+2]+=(mz-pos[idx+2])*0.0008*mid;
+      }
+    }
+    APP.particleSystem.geometry.attributes.position.needsUpdate = true;
+    APP.particleSystem.rotation.y = time * 0.05;
+  }
+  
+  // Neon lights pulse
+  APP.neonLights.forEach((nl,i)=>{
+    const bv = i%2===0 ? bass : treble;
+    nl.light.intensity = nl.baseIntensity * (0.3 + bv*5*mi + beatPulse*3*mi);
+    nl.light.position.y = nl.basePos.y + Math.sin(time*0.4+nl.phase)*0.5;
+  });
+  
+  // City buildings react to audio
+  if(APP.settings.cityReact) {
+    APP.cityBuildings.forEach((bld, i) => {
+      if(bld.userData && bld.userData.baseEmissive !== undefined) {
+        // Building vibration
+        const vib = beatPulse * cr * mi * 0.05;
+        bld.position.y = bld.userData.baseY + Math.sin(time * 8 + bld.userData.phase) * vib;
+        
+        // Emissive intensity pulse
+        if(bld.material && bld.material.emissiveIntensity !== undefined) {
+          const bandVal = i % 3 === 0 ? bass : (i % 3 === 1 ? mid : treble);
+          bld.material.emissiveIntensity = bld.userData.baseEmissive * (0.5 + bandVal * 3 * cr * mi + beatPulse * 2 * cr * mi);
+        }
+      }
+      // Neon signs flicker
+      if(bld.userData && bld.userData.baseColor !== undefined) {
+        const flicker = 0.5 + 0.5 * Math.sin(time * 3 + bld.userData.phase) + beatPulse * 0.5 * mi;
+        if(bld.material) bld.material.opacity = Math.min(1, 0.3 + flicker * 0.7 * cr * mi);
+      }
+      // Antenna lights blink
+      if(bld.userData && bld.userData.blinkPhase !== undefined) {
+        const blink = Math.sin(time * 2 + bld.userData.blinkPhase) > 0.3 ? 1 : 0.1;
+        if(bld.material) bld.material.opacity = blink;
+      }
+    });
+  }
+  
+  // Volumetric fog
+  if(APP.settings.volfog) {
+    APP.volumetricFog.forEach((fp,i)=>{
+      fp.material.uniforms.uTime.value = time + i*10;
+      fp.material.uniforms.uDensity.value = APP.settings.fogDensity * mi;
+      fp.visible = true;
+      if(fp.rotation.x===-Math.PI/2) fp.rotation.z = time*0.015*(i%2===0?1:-1);
+      else fp.rotation.y += 0.0008*(i%2===0?1:-1);
+    });
+  } else {
+    APP.volumetricFog.forEach(fp => fp.visible = false);
+  }
+  
+  // Scene fog density reacts
+  APP.scene.fog.density = 0.012 - bass * 0.005 * mi;
+  
+  updateCamera(time, delta);
+}
+
+function updateCamera(time) {
+  const preset = APP.settings.cameraPreset;
+  const bass = APP.bands.bass * APP.settings.masterIntensity;
+  const mi = APP.settings.masterIntensity;
+  
+  switch(preset) {
+    case 'orbit':
+      APP.camera.position.x = Math.sin(time*0.18)*16;
+      APP.camera.position.z = Math.cos(time*0.18)*16;
+      APP.camera.position.y = 8+Math.sin(time*0.08)*3+bass*3*mi;
+      break;
+    case 'push':
+      APP.camera.position.x = Math.sin(time*0.12)*4;
+      APP.camera.position.z = 18-bass*6*mi-beatPulse*4*mi;
+      APP.camera.position.y = 5+beatPulse*3*mi;
+      break;
+    case 'topdown':
+      APP.camera.position.x = Math.sin(time*0.08)*3;
+      APP.camera.position.z = Math.cos(time*0.08)*3;
+      APP.camera.position.y = 22+bass*4*mi;
+      break;
+    case 'dramatic':
+      const a = time*0.25;
+      APP.camera.position.x = Math.sin(a)*(14+bass*6*mi);
+      APP.camera.position.z = Math.cos(a)*(14+bass*6*mi);
+      APP.camera.position.y = 3+Math.sin(time*0.4)*5+beatPulse*4*mi;
+      break;
+    case 'flyover':
+      const fa = time * 0.1;
+      APP.camera.position.x = Math.sin(fa) * 30;
+      APP.camera.position.z = Math.cos(fa) * 30;
+      APP.camera.position.y = 15 + Math.sin(time * 0.15) * 5 + bass * 2 * mi;
+      break;
+  }
+  APP.camera.lookAt(0, 0, 0);
+  APP.camera.fov = APP.settings.fov + beatPulse * 5 * mi;
+  APP.camera.updateProjectionMatrix();
+}
+
+function updateUI() {
+  document.getElementById('band-sub').style.width=(APP.bands.sub*100)+'%';
+  document.getElementById('band-bass').style.width=(APP.bands.bass*100)+'%';
+  document.getElementById('band-lowmid').style.width=(APP.bands.lowmid*100)+'%';
+  document.getElementById('band-mid').style.width=(APP.bands.mid*100)+'%';
+  document.getElementById('band-himid').style.width=(APP.bands.himid*100)+'%';
+  document.getElementById('band-treble').style.width=(APP.bands.treble*100)+'%';
+  document.getElementById('bpm-display').textContent=APP.detectedBPM||'--';
+  document.getElementById('beat-count').textContent=APP.beatCount;
+  document.getElementById('rms-display').textContent=APP.rms.toFixed(2);
+  document.getElementById('centroid-display').textContent=Math.round(APP.spectralCentroid);
+  if(APP.audioBuffer){
+    const c=getCurrentTime(),d=APP.audioBuffer.duration;
+    document.getElementById('progress-fill').style.width=(c/d*100)+'%';
+    document.getElementById('time-display').textContent=`${Math.floor(c/60)}:${Math.floor(c%60).toString().padStart(2,'0')} / ${Math.floor(d/60)}:${Math.floor(d%60).toString().padStart(2,'0')}`;
+  }
+  updateWaveform();
+}
+
+function initUI() {
+  const uploadArea = document.getElementById('upload-area');
+  const fileInput = document.getElementById('file-input');
+  uploadArea.addEventListener('click',()=>fileInput.click());
+  uploadArea.addEventListener('dragover',(e)=>{e.preventDefault();uploadArea.style.borderColor='var(--cyan)';});
+  uploadArea.addEventListener('dragleave',()=>{uploadArea.style.borderColor='';});
+  uploadArea.addEventListener('drop',(e)=>{e.preventDefault();uploadArea.style.borderColor='';if(e.dataTransfer.files.length)loadFile(e.dataTransfer.files[0]);});
+  fileInput.addEventListener('change',(e)=>{if(e.target.files.length)loadFile(e.target.files[0]);});
+  
+  document.getElementById('play-btn').addEventListener('click',togglePlayback);
+  document.getElementById('progress-bar').addEventListener('click',(e)=>{if(!APP.audioBuffer)return;const r=e.target.getBoundingClientRect();seekTo((e.clientX-r.left)/r.width*APP.audioBuffer.duration);});
+  document.getElementById('waveform-container').addEventListener('click',(e)=>{if(!APP.audioBuffer)return;const r=e.target.getBoundingClientRect();seekTo((e.clientX-r.left)/r.width*APP.audioBuffer.duration);});
+  
+  document.getElementById('loop-btn').addEventListener('click',()=>{APP.loopEnabled=!APP.loopEnabled;const b=document.getElementById('loop-btn');b.style.borderColor=APP.loopEnabled?'var(--amber)':'';b.style.color=APP.loopEnabled?'var(--amber)':'';showNotification(APP.loopEnabled?'Loop ON':'Loop OFF');});
+  document.getElementById('mic-btn').addEventListener('click',toggleMic);
+  document.getElementById('meta-artist').addEventListener('input',updateTitleOverlay);
+  document.getElementById('meta-song').addEventListener('input',updateTitleOverlay);
+  
+  // Master Intensity
+  document.getElementById('master-intensity').addEventListener('input',(e)=>{
+    APP.settings.masterIntensity = parseInt(e.target.value)/100;
+    document.getElementById('master-val').textContent = e.target.value+'%';
+  });
+  
+  document.getElementById('freq-min').addEventListener('input',(e)=>{APP.settings.freqMin=parseInt(e.target.value);document.getElementById('freq-range-val').textContent=APP.settings.freqMin+'-'+APP.settings.freqMax;});
+  document.getElementById('freq-max').addEventListener('input',(e)=>{APP.settings.freqMax=parseInt(e.target.value);document.getElementById('freq-range-val').textContent=APP.settings.freqMin+'-'+APP.settings.freqMax;});
+  document.getElementById('freq-scale').addEventListener('change',(e)=>APP.settings.freqScale=e.target.value);
+  
+  document.querySelectorAll('.palette-swatch').forEach(s=>{
+    s.addEventListener('click',()=>{document.querySelectorAll('.palette-swatch').forEach(x=>x.classList.remove('active'));s.classList.add('active');APP.settings.palette=s.dataset.palette;});
+  });
+  
+  document.getElementById('cym-complexity').addEventListener('input',(e)=>{APP.settings.cymComplexity=parseInt(e.target.value);document.getElementById('cym-complexity-val').textContent=e.target.value;});
+  document.getElementById('cym-smooth').addEventListener('input',(e)=>{APP.settings.cymSmooth=parseInt(e.target.value)/100;document.getElementById('cym-smooth-val').textContent=e.target.value+'%';});
+  document.getElementById('cym-height').addEventListener('input',(e)=>{APP.settings.cymHeight=parseInt(e.target.value)/100;document.getElementById('cym-height-val').textContent=e.target.value+'%';});
+  document.getElementById('cym-speed').addEventListener('input',(e)=>{APP.settings.cymSpeed=parseInt(e.target.value)/100;document.getElementById('cym-speed-val').textContent=e.target.value+'%';});
+  document.getElementById('cym-mode').addEventListener('change',(e)=>APP.settings.cymMode=e.target.value);
+  
+  document.getElementById('part-density').addEventListener('input',(e)=>{APP.settings.particleDensity=parseInt(e.target.value);document.getElementById('part-density-val').textContent=e.target.value;});
+  document.getElementById('part-speed').addEventListener('input',(e)=>{APP.settings.particleSpeed=parseInt(e.target.value)/100;document.getElementById('part-speed-val').textContent=e.target.value+'%';});
+  
+  setupToggle('toggle-modal',(v)=>APP.settings.modalAttraction=v);
+  setupToggle('toggle-volfog',(v)=>APP.settings.volfog=v);
+  setupToggle('toggle-cityreact',(v)=>APP.settings.cityReact=v);
+  
+  document.getElementById('fog-density').addEventListener('input',(e)=>{APP.settings.fogDensity=parseInt(e.target.value)/100;document.getElementById('fog-density-val').textContent=e.target.value+'%';});
+  document.getElementById('city-react').addEventListener('input',(e)=>{APP.settings.cityReactivity=parseInt(e.target.value)/100;document.getElementById('city-react-val').textContent=e.target.value+'%';});
+  
+  document.getElementById('camera-preset').addEventListener('change',(e)=>APP.settings.cameraPreset=e.target.value);
+  document.getElementById('camera-fov').addEventListener('input',(e)=>{APP.settings.fov=parseInt(e.target.value);document.getElementById('fov-val').textContent=e.target.value+'°';});
+  
+  document.querySelectorAll('.preset-item').forEach(item=>{
+    item.addEventListener('click',()=>{document.querySelectorAll('.preset-item').forEach(i=>i.classList.remove('active'));item.classList.add('active');applyPreset(item.dataset.preset);});
+  });
+  
+  document.getElementById('save-preset-btn').addEventListener('click',savePreset);
+  document.getElementById('load-preset-btn').addEventListener('click',()=>{const s=localStorage.getItem('neonRuinsPreset');if(s){Object.assign(APP.settings,JSON.parse(s));syncUIFromSettings();showNotification('Preset loaded');}else showNotification('No saved preset');});
+  
+  document.getElementById('export-ae-btn').addEventListener('click',showAEExport);
+  document.getElementById('export-frame-btn').addEventListener('click',captureFrame);
+  document.getElementById('close-modal-btn').addEventListener('click',()=>document.getElementById('export-modal').classList.remove('visible'));
+  document.getElementById('copy-ae-btn').addEventListener('click',()=>{navigator.clipboard.writeText(document.getElementById('ae-json-output').value);showNotification('Copied');});
+  document.getElementById('download-ae-btn').addEventListener('click',()=>{const b=new Blob([document.getElementById('ae-json-output').value],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='neon_ruins_ae.json';a.click();URL.revokeObjectURL(u);});
+  document.getElementById('export-fps').addEventListener('change',(e)=>APP.settings.fps=parseInt(e.target.value));
+}
+
+function setupToggle(id,cb){const el=document.getElementById(id);el.addEventListener('click',()=>{el.classList.toggle('active');cb(el.classList.contains('active'));});}
+
+function loadFile(file) {
+  showNotification('Loading: '+file.name);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    APP.audioCtx.decodeAudioData(e.target.result, (buffer) => {
+      APP.audioBuffer = buffer;
+      if(APP.source){APP.source.stop();APP.source=null;}
+      APP.isPlaying=false;APP.pauseTime=0;
+      document.getElementById('play-btn').textContent='▶';
+      APP.beatCount=0;APP.beatTimes=[];APP.detectedBPM=0;APP.lastBeatTime=0;
+      document.getElementById('file-info').innerHTML=`<div style="color:var(--cyan)">${file.name}</div><div>${buffer.duration.toFixed(1)}s · ${(buffer.sampleRate/1000).toFixed(1)}kHz</div>`;
+      const name=file.name.replace(/\.(wav|mp3|ogg)$/i,'');
+      if(!document.getElementById('meta-artist').value){const p=name.split(' - ');if(p.length>=2){document.getElementById('meta-artist').value=p[0].trim();document.getElementById('meta-song').value=p[1].trim();}else document.getElementById('meta-song').value=name;updateTitleOverlay();}
+      showNotification('Audio loaded');
+    }, ()=>showNotification('Decode error'));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function togglePlayback() {
+  if(APP.audioCtx.state==='suspended') APP.audioCtx.resume();
+  if(!APP.audioBuffer){showNotification('Load audio first');return;}
+  if(APP.isPlaying){APP.pauseTime=getCurrentTime();APP.source.stop();APP.source=null;APP.isPlaying=false;document.getElementById('play-btn').textContent='▶';}
+  else{
+    const off=APP.pauseTime||0;
+    APP.source=APP.audioCtx.createBufferSource();
+    APP.source.buffer=APP.audioBuffer;
+    APP.source.connect(APP.analyser);
+    APP.source.loop=APP.loopEnabled;
+    APP.source.start(0,off);
+    APP.startTime=APP.audioCtx.currentTime-off;
+    APP.isPlaying=true;
+    document.getElementById('play-btn').textContent='⏸';
+    showTitleCard();
+    APP.source.onended=()=>{if(APP.isPlaying&&!APP.loopEnabled){APP.isPlaying=false;APP.pauseTime=0;document.getElementById('play-btn').textContent='▶';}};
+  }
+}
+
+function toggleMic() {
+  if(APP.useMic){APP.useMic=false;document.getElementById('mic-btn').style.borderColor='';document.getElementById('mic-btn').style.color='';showNotification('Mic off');return;}
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    if(APP.micSource)APP.micSource.disconnect();
+    APP.micSource=APP.audioCtx.createMediaStreamSource(stream);
+    APP.micSource.connect(APP.analyser);
+    APP.useMic=true;
+    document.getElementById('mic-btn').style.borderColor='var(--green)';
+    document.getElementById('mic-btn').style.color='var(--green)';
+    showNotification('Mic active');
+  }).catch(()=>showNotification('Mic denied'));
+}
+
+function getCurrentTime(){if(APP.useMic)return APP.audioCtx.currentTime;if(!APP.isPlaying)return APP.pauseTime||0;return APP.audioCtx.currentTime-APP.startTime;}
+
+function seekTo(time){if(!APP.audioBuffer)return;const was=APP.isPlaying;if(APP.source){APP.source.stop();APP.source=null;}APP.pauseTime=Math.max(0,Math.min(time,APP.audioBuffer.duration));if(was){APP.source=APP.audioCtx.createBufferSource();APP.source.buffer=APP.audioBuffer;APP.source.connect(APP.analyser);APP.source.loop=APP.loopEnabled;APP.source.start(0,APP.pauseTime);APP.startTime=APP.audioCtx.currentTime-APP.pauseTime;}}
+
+function updateTitleOverlay(){document.getElementById('display-artist').textContent=document.getElementById('meta-artist').value;document.getElementById('display-song').textContent=document.getElementById('meta-song').value;}
+function showTitleCard(){const o=document.getElementById('title-overlay');o.classList.add('visible');setTimeout(()=>o.classList.remove('visible'),5000);}
+
+function onResize(){const v=document.getElementById('viewport');const w=v.clientWidth,h=v.clientHeight;APP.camera.aspect=w/h;APP.camera.updateProjectionMatrix();APP.renderer.setSize(w,h);}
+
+function applyPreset(name) {
+  const presets = {
+    default: { masterIntensity:0.75, cymComplexity:4, cymSmooth:0.7, cymHeight:0.4, cymSpeed:0.3, cymMode:'organic', particleDensity:1500, particleSpeed:0.4, modalAttraction:true, volfog:true, cityReact:true, fogDensity:0.5, cityReactivity:0.7, cameraPreset:'orbit', fov:60, palette:'neon' },
+    cyberpunk: { masterIntensity:0.9, cymComplexity:7, cymSmooth:0.5, cymHeight:0.6, cymSpeed:0.5, cymMode:'evolving', particleDensity:3000, particleSpeed:0.6, modalAttraction:true, volfog:true, cityReact:true, fogDensity:0.7, cityReactivity:0.9, cameraPreset:'dramatic', fov:75, palette:'neon' },
+    minimal: { masterIntensity:0.4, cymComplexity:3, cymSmooth:0.9, cymHeight:0.2, cymSpeed:0.2, cymMode:'organic', particleDensity:500, particleSpeed:0.2, modalAttraction:false, volfog:true, cityReact:true, fogDensity:0.3, cityReactivity:0.3, cameraPreset:'topdown', fov:50, palette:'ice' },
+    intense: { masterIntensity:1.0, cymComplexity:10, cymSmooth:0.3, cymHeight:0.8, cymSpeed:0.8, cymMode:'chladni', particleDensity:5000, particleSpeed:0.9, modalAttraction:true, volfog:true, cityReact:true, fogDensity:0.8, cityReactivity:1.0, cameraPreset:'push', fov:90, palette:'fire' }
+  };
+  if(presets[name]){Object.assign(APP.settings,presets[name]);syncUIFromSettings();showNotification('Preset: '+name);}
+}
+
+function syncUIFromSettings() {
+  document.getElementById('master-intensity').value=APP.settings.masterIntensity*100;
+  document.getElementById('master-val').textContent=Math.round(APP.settings.masterIntensity*100)+'%';
+  document.getElementById('cym-complexity').value=APP.settings.cymComplexity;
+  document.getElementById('cym-complexity-val').textContent=APP.settings.cymComplexity;
+  document.getElementById('cym-smooth').value=APP.settings.cymSmooth*100;
+  document.getElementById('cym-smooth-val').textContent=Math.round(APP.settings.cymSmooth*100)+'%';
+  document.getElementById('cym-height').value=APP.settings.cymHeight*100;
+  document.getElementById('cym-height-val').textContent=Math.round(APP.settings.cymHeight*100)+'%';
+  document.getElementById('cym-speed').value=APP.settings.cymSpeed*100;
+  document.getElementById('cym-speed-val').textContent=Math.round(APP.settings.cymSpeed*100)+'%';
+  document.getElementById('cym-mode').value=APP.settings.cymMode;
+  document.getElementById('part-density').value=APP.settings.particleDensity;
+  document.getElementById('part-density-val').textContent=APP.settings.particleDensity;
+  document.getElementById('part-speed').value=APP.settings.particleSpeed*100;
+  document.getElementById('part-speed-val').textContent=Math.round(APP.settings.particleSpeed*100)+'%';
+  document.getElementById('fog-density').value=APP.settings.fogDensity*100;
+  document.getElementById('fog-density-val').textContent=Math.round(APP.settings.fogDensity*100)+'%';
+  document.getElementById('city-react').value=APP.settings.cityReactivity*100;
+  document.getElementById('city-react-val').textContent=Math.round(APP.settings.cityReactivity*100)+'%';
+  document.getElementById('camera-preset').value=APP.settings.cameraPreset;
+  document.getElementById('camera-fov').value=APP.settings.fov;
+  document.getElementById('fov-val').textContent=APP.settings.fov+'°';
+  setToggle('toggle-modal',APP.settings.modalAttraction);
+  setToggle('toggle-volfog',APP.settings.volfog);
+  setToggle('toggle-cityreact',APP.settings.cityReact);
+  document.querySelectorAll('.palette-swatch').forEach(s=>s.classList.toggle('active',s.dataset.palette===APP.settings.palette));
+}
+
+function setToggle(id,v){const el=document.getElementById(id);if(v)el.classList.add('active');else el.classList.remove('active');}
+function savePreset(){localStorage.setItem('neonRuinsPreset',JSON.stringify(APP.settings));showNotification('Preset saved');}
+
+function showAEExport(){document.getElementById('ae-json-output').value=JSON.stringify(generateAEManifest(),null,2);document.getElementById('export-modal').classList.add('visible');}
+function generateAEManifest(){
+  const artist=document.getElementById('meta-artist').value||'Unknown';
+  const song=document.getElementById('meta-song').value||'Untitled';
+  return{version:"2.0",generator:"NEON RUINS v2.0",composition:{name:`${artist} - ${song}`,width:1080,height:1920,fps:APP.settings.fps,duration:APP.audioBuffer?APP.audioBuffer.duration:0},metadata:{artist,song,bpm:APP.detectedBPM||null,beatTimestamps:APP.beatTimes.slice(0,100)},settings:{...APP.settings}};
+}
+function captureFrame(){APP.renderer.render(APP.scene,APP.camera);const a=document.createElement('a');a.href=APP.renderer.domElement.toDataURL('image/png');a.download='neon_ruins.png';a.click();showNotification('Captured');}
+function showNotification(msg){const el=document.getElementById('notification');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500);}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
