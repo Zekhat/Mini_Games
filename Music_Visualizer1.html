@@ -1,0 +1,2192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON RUINS — Music Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --cyan: #00f0ff;
+  --magenta: #ff00aa;
+  --green: #39ff14;
+  --violet: #8b00ff;
+  --dark: #0a0a0f;
+  --darker: #050508;
+  --panel: rgba(10, 10, 20, 0.85);
+  --border: rgba(0, 240, 255, 0.15);
+  --text: #c0c0d0;
+  --text-dim: #606080;
+}
+
+body {
+  background: var(--darker);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 280px 1fr 260px;
+  grid-template-rows: 1fr 80px;
+  height: 100vh;
+  gap: 1px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan) transparent;
+}
+
+.panel::-webkit-scrollbar { width: 4px; }
+.panel::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; }
+
+.panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+#left-panel { grid-column: 1; grid-row: 1; }
+#viewport { grid-column: 2; grid-row: 1; position: relative; background: #000; }
+#right-panel { grid-column: 3; grid-row: 1; }
+#bottom-bar { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+
+#upload-area {
+  border: 1px dashed var(--cyan);
+  border-radius: 6px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-bottom: 12px;
+  position: relative;
+}
+#upload-area:hover, #upload-area.dragover {
+  background: rgba(0, 240, 255, 0.05);
+  border-color: var(--magenta);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+}
+#upload-area .icon { font-size: 24px; margin-bottom: 6px; }
+#upload-area .label { font-size: 10px; color: var(--text-dim); }
+#upload-area input { display: none; }
+
+.form-group { margin-bottom: 10px; }
+.form-group label {
+  display: block;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+  width: 100%;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-group input:focus, .form-group select:focus { border-color: var(--cyan); }
+
+.slider-group { margin-bottom: 10px; }
+.slider-group label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.slider-group label span { color: var(--cyan); }
+input[type="range"] {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--cyan);
+}
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.4);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+.btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); }
+.btn-primary { background: rgba(0, 240, 255, 0.1); border-color: var(--cyan); color: var(--cyan); }
+.btn-primary:hover { background: rgba(0, 240, 255, 0.2); }
+.btn-magenta { border-color: var(--magenta); color: var(--magenta); }
+.btn-magenta:hover { background: rgba(255, 0, 170, 0.1); box-shadow: 0 0 10px rgba(255, 0, 170, 0.2); }
+
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+
+#spectrogram-container {
+  width: 100%;
+  height: 160px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  position: relative;
+}
+#spectrogram-canvas { width: 100%; height: 100%; }
+
+#waveform-container {
+  width: 100%;
+  height: 60px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+#waveform-canvas { width: 100%; height: 100%; }
+
+.beat-display {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.beat-item {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+}
+.beat-item .value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  color: var(--cyan);
+}
+.beat-item .label {
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.band-meters { margin-bottom: 12px; }
+.band-meter { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.band-meter .band-label { font-size: 8px; width: 50px; color: var(--text-dim); text-transform: uppercase; }
+.band-meter .band-bar-bg { flex: 1; height: 6px; background: rgba(255,255,255,0.03); border-radius: 3px; overflow: hidden; }
+.band-meter .band-bar { height: 100%; border-radius: 3px; transition: width 0.05s; width: 0%; }
+
+#viewport-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
+#title-overlay {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#title-overlay.visible { opacity: 1; }
+#title-overlay .artist {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  color: var(--cyan);
+  text-shadow: 0 0 20px var(--cyan);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+#title-overlay .song {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 0 30px var(--magenta), 0 0 60px var(--magenta);
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+#format-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+#fps-counter {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 10px;
+  color: var(--green);
+  font-family: 'Orbitron', sans-serif;
+}
+
+#bottom-bar { background: var(--panel); border-top: 1px solid var(--border); }
+#play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 2px solid var(--cyan);
+  background: rgba(0, 240, 255, 0.05);
+  color: var(--cyan);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#play-btn:hover { background: rgba(0, 240, 255, 0.15); box-shadow: 0 0 20px rgba(0, 240, 255, 0.3); }
+#progress-bar { flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; cursor: pointer; position: relative; }
+#progress-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--magenta)); border-radius: 3px; width: 0%; transition: width 0.1s linear; }
+#time-display { font-family: 'Orbitron', sans-serif; font-size: 11px; color: var(--text-dim); min-width: 100px; text-align: center; }
+
+.preset-list { margin-bottom: 12px; }
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.2s;
+  margin-bottom: 2px;
+}
+.preset-item:hover { border-color: var(--border); background: rgba(0,0,0,0.3); }
+.preset-item.active { border-color: var(--cyan); background: rgba(0, 240, 255, 0.05); color: var(--cyan); }
+
+.toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.toggle-row label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.toggle {
+  width: 32px;
+  height: 16px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.toggle.active { background: rgba(0, 240, 255, 0.2); border-color: var(--cyan); }
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  top: 2px;
+  left: 2px;
+  transition: all 0.2s;
+}
+.toggle.active::after { left: 18px; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+.palette-row { display: flex; gap: 4px; margin-bottom: 10px; }
+.palette-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: transform 0.2s;
+}
+.palette-swatch:hover { transform: scale(1.2); }
+.palette-swatch.active { border-color: #fff; box-shadow: 0 0 8px currentColor; }
+
+.section-divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+#loading-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--darker);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: opacity 0.5s;
+}
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+#loading-overlay .logo {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--cyan);
+  text-shadow: 0 0 40px var(--cyan);
+  margin-bottom: 20px;
+}
+#loading-overlay .subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+#export-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+#export-modal.visible { display: flex; }
+#export-modal .modal-content {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  width: 400px;
+  max-width: 90vw;
+}
+#export-modal .modal-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  color: var(--cyan);
+  margin-bottom: 16px;
+}
+
+.notification {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background: var(--panel);
+  border: 1px solid var(--cyan);
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--cyan);
+  z-index: 200;
+  transition: transform 0.3s;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+}
+.notification.show { transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 900px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto 80px; }
+  #left-panel, #right-panel { max-height: 200px; }
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="logo">NEON RUINS</div>
+  <div class="subtitle">Music Visualizer Engine</div>
+</div>
+
+<div id="app">
+  <div id="left-panel" class="panel">
+    <div class="panel-title">⬡ Audio Source</div>
+    <div id="upload-area">
+      <div class="icon">◈</div>
+      <div class="label">Drop .WAV file or click to upload</div>
+      <input type="file" id="file-input" accept=".wav,audio/*">
+    </div>
+    <div id="file-info" style="font-size:9px;color:var(--text-dim);margin-bottom:10px;"></div>
+
+    <div class="panel-title">⬡ Metadata</div>
+    <div class="form-group">
+      <label>Artist</label>
+      <input type="text" id="meta-artist" placeholder="Enter artist name...">
+    </div>
+    <div class="form-group">
+      <label>Song Title</label>
+      <input type="text" id="meta-song" placeholder="Enter song title...">
+    </div>
+    <div class="form-group">
+      <label>BPM Override</label>
+      <input type="number" id="meta-bpm" placeholder="Auto-detect" min="40" max="300">
+    </div>
+    <div class="form-group">
+      <label>Start Offset (s)</label>
+      <input type="number" id="meta-offset" placeholder="0.0" step="0.1" min="0">
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Spectrogram</div>
+    <div class="slider-group">
+      <label>Frequency Range <span id="freq-range-val">20-20k Hz</span></label>
+      <input type="range" id="freq-min" min="20" max="5000" value="20">
+      <input type="range" id="freq-max" min="5000" max="22000" value="20000">
+    </div>
+    <div class="form-group">
+      <label>Scale</label>
+      <select id="freq-scale">
+        <option value="log">Logarithmic</option>
+        <option value="linear">Linear</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Color Palette</label></div>
+    <div class="palette-row" id="palette-row">
+      <div class="palette-swatch active" data-palette="neon" style="background:linear-gradient(90deg,#00f0ff,#ff00aa)"></div>
+      <div class="palette-swatch" data-palette="fire" style="background:linear-gradient(90deg,#ff4400,#ffaa00)"></div>
+      <div class="palette-swatch" data-palette="matrix" style="background:linear-gradient(90deg,#003300,#39ff14)"></div>
+      <div class="palette-swatch" data-palette="violet" style="background:linear-gradient(90deg,#220044,#8b00ff)"></div>
+      <div class="palette-swatch" data-palette="ice" style="background:linear-gradient(90deg,#001133,#00ccff)"></div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Cymatics</div>
+    <div class="slider-group">
+      <label>Intensity <span id="cym-intensity-val">75%</span></label>
+      <input type="range" id="cym-intensity" min="0" max="100" value="75">
+    </div>
+    <div class="slider-group">
+      <label>Complexity <span id="cym-complexity-val">5</span></label>
+      <input type="range" id="cym-complexity" min="1" max="12" value="5">
+    </div>
+    <div class="slider-group">
+      <label>Displacement <span id="cym-displace-val">60%</span></label>
+      <input type="range" id="cym-displace" min="0" max="100" value="60">
+    </div>
+    <div class="slider-group">
+      <label>Pattern Speed <span id="cym-speed-val">50%</span></label>
+      <input type="range" id="cym-speed" min="0" max="100" value="50">
+    </div>
+    <div class="form-group">
+      <label>Mode</label>
+      <select id="cym-mode">
+        <option value="chladni">Chladni Patterns</option>
+        <option value="heightfield">Heightfield</option>
+        <option value="modal">Modal Synthesis</option>
+        <option value="evolving">Evolving (Auto-Morph)</option>
+      </select>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Particles</div>
+    <div class="slider-group">
+      <label>Density <span id="part-density-val">2000</span></label>
+      <input type="range" id="part-density" min="100" max="8000" value="2000" step="100">
+    </div>
+    <div class="slider-group">
+      <label>Speed <span id="part-speed-val">50%</span></label>
+      <input type="range" id="part-speed" min="0" max="100" value="50">
+    </div>
+    <div class="toggle-row">
+      <label>Particle Trails</label>
+      <div class="toggle active" id="toggle-trails"></div>
+    </div>
+    <div class="toggle-row">
+      <label>Modal Attraction</label>
+      <div class="toggle active" id="toggle-modal"></div>
+    </div>
+  </div>
+
+  <div id="viewport">
+    <canvas id="three-canvas"></canvas>
+    <div id="viewport-overlay">
+      <div id="fps-counter">60 FPS</div>
+      <div id="format-badge">1080×1920 · 9:16</div>
+      <div id="title-overlay">
+        <div class="artist" id="display-artist"></div>
+        <div class="song" id="display-song"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="right-panel" class="panel">
+    <div class="panel-title">⬡ Spectrogram</div>
+    <div id="spectrogram-container">
+      <canvas id="spectrogram-canvas"></canvas>
+    </div>
+
+    <div class="panel-title">⬡ Waveform</div>
+    <div id="waveform-container">
+      <canvas id="waveform-canvas"></canvas>
+    </div>
+
+    <div class="panel-title">⬡ Analysis</div>
+    <div class="beat-display">
+      <div class="beat-item"><div class="value" id="bpm-display">--</div><div class="label">BPM</div></div>
+      <div class="beat-item"><div class="value" id="beat-count">0</div><div class="label">Beats</div></div>
+      <div class="beat-item"><div class="value" id="rms-display">0.00</div><div class="label">RMS</div></div>
+      <div class="beat-item"><div class="value" id="centroid-display">0</div><div class="label">Centroid</div></div>
+    </div>
+
+    <div class="panel-title">⬡ Frequency Bands</div>
+    <div class="band-meters">
+      <div class="band-meter"><span class="band-label">Sub</span><div class="band-bar-bg"><div class="band-bar" id="band-sub" style="background:var(--violet)"></div></div></div>
+      <div class="band-meter"><span class="band-label">Bass</span><div class="band-bar-bg"><div class="band-bar" id="band-bass" style="background:var(--magenta)"></div></div></div>
+      <div class="band-meter"><span class="band-label">Low-Mid</span><div class="band-bar-bg"><div class="band-bar" id="band-lowmid" style="background:#ff4400"></div></div></div>
+      <div class="band-meter"><span class="band-label">Mid</span><div class="band-bar-bg"><div class="band-bar" id="band-mid" style="background:var(--cyan)"></div></div></div>
+      <div class="band-meter"><span class="band-label">Hi-Mid</span><div class="band-bar-bg"><div class="band-bar" id="band-himid" style="background:var(--green)"></div></div></div>
+      <div class="band-meter"><span class="band-label">Treble</span><div class="band-bar-bg"><div class="band-bar" id="band-treble" style="background:#ffff00"></div></div></div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Post Effects</div>
+    <div class="toggle-row"><label>Bloom</label><div class="toggle active" id="toggle-bloom"></div></div>
+    <div class="toggle-row"><label>Chromatic Aberration</label><div class="toggle active" id="toggle-chromatic"></div></div>
+    <div class="toggle-row"><label>Film Grain</label><div class="toggle" id="toggle-grain"></div></div>
+    <div class="toggle-row"><label>Vignette</label><div class="toggle active" id="toggle-vignette"></div></div>
+    <div class="toggle-row"><label>Volumetric Fog</label><div class="toggle active" id="toggle-volfog"></div></div>
+    <div class="slider-group">
+      <label>Bloom Strength <span id="bloom-str-val">60%</span></label>
+      <input type="range" id="bloom-strength" min="0" max="100" value="60">
+    </div>
+    <div class="slider-group">
+      <label>Fog Density <span id="fog-density-val">50%</span></label>
+      <input type="range" id="fog-density" min="0" max="100" value="50">
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Camera</div>
+    <div class="form-group">
+      <label>Preset</label>
+      <select id="camera-preset">
+        <option value="orbit">Orbit</option>
+        <option value="push">Beat Push</option>
+        <option value="topdown">Top Down</option>
+        <option value="dramatic">Dramatic</option>
+      </select>
+    </div>
+    <div class="slider-group">
+      <label>FOV <span id="fov-val">60°</span></label>
+      <input type="range" id="camera-fov" min="30" max="120" value="60">
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Presets</div>
+    <div class="preset-list" id="preset-list">
+      <div class="preset-item active" data-preset="default">◈ Neon Ruins (Default)</div>
+      <div class="preset-item" data-preset="cyberpunk">◈ Cyberpunk Pulse</div>
+      <div class="preset-item" data-preset="minimal">◈ Minimal Wave</div>
+      <div class="preset-item" data-preset="intense">◈ Maximum Intensity</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="save-preset-btn">Save Preset</button>
+      <button class="btn" id="load-preset-btn">Load</button>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="panel-title">⬡ Export</div>
+    <div class="btn-row">
+      <button class="btn btn-magenta" id="export-ae-btn">AE Manifest</button>
+      <button class="btn" id="export-frame-btn">Capture Frame</button>
+    </div>
+    <div class="form-group">
+      <label>Output FPS</label>
+      <select id="export-fps">
+        <option value="30">30 fps</option>
+        <option value="60" selected>60 fps</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="bottom-bar">
+    <div id="play-btn">▶</div>
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <div id="time-display">0:00 / 0:00</div>
+    <button class="btn" id="loop-btn">⟳ Loop</button>
+    <button class="btn" id="mic-btn">🎤 Mic</button>
+  </div>
+</div>
+
+<div id="export-modal">
+  <div class="modal-content">
+    <div class="modal-title">After Effects Export Manifest</div>
+    <textarea id="ae-json-output" style="width:100%;height:200px;background:rgba(0,0,0,0.5);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:8px;border-radius:4px;resize:none;"></textarea>
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-primary" id="copy-ae-btn">Copy to Clipboard</button>
+      <button class="btn" id="download-ae-btn">Download JSON</button>
+      <button class="btn" id="close-modal-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+const APP = {
+  audioCtx: null, analyser: null, source: null, audioBuffer: null,
+  isPlaying: false, startTime: 0, pauseTime: 0, loopEnabled: false, useMic: false,
+  fftSize: 2048, frequencyData: null, timeDomainData: null,
+  bands: { sub: 0, bass: 0, lowmid: 0, mid: 0, himid: 0, treble: 0 },
+  rms: 0, spectralCentroid: 0, spectralFlux: 0, prevSpectrum: null,
+  beatCount: 0, detectedBPM: 0, beatTimes: [], lastBeatTime: 0,
+  beatThreshold: 1.3, beatEnergy: 0, beatEnergyAvg: 0,
+  spectrogramData: [], spectrogramWidth: 236, spectrogramHeight: 160,
+  scene: null, camera: null, renderer: null,
+  cymaticMesh: null, particleSystem: null, ruinsGroup: null,
+  neonLights: [], volumetricFog: [], clock: null,
+  settings: {
+    freqMin: 20, freqMax: 20000, freqScale: 'log', palette: 'neon',
+    cymIntensity: 0.75, cymComplexity: 5, cymDisplace: 0.6, cymSpeed: 0.5, cymMode: 'chladni',
+    particleDensity: 2000, particleSpeed: 0.5, trails: true, modalAttraction: true,
+    bloom: true, chromatic: true, grain: false, vignette: true, volfog: true,
+    bloomStrength: 0.6, fogDensity: 0.5,
+    cameraPreset: 'orbit', fov: 60, fps: 60
+  }
+};
+
+const PALETTES = {
+  neon: [[0,0,0],[0,20,40],[0,100,180],[0,240,255],[180,0,255],[255,0,170],[255,100,200],[255,255,255]],
+  fire: [[0,0,0],[40,0,0],[180,30,0],[255,100,0],[255,180,0],[255,255,50],[255,255,200],[255,255,255]],
+  matrix: [[0,0,0],[0,20,0],[0,80,0],[0,180,20],[57,255,20],[120,255,80],[200,255,180],[255,255,255]],
+  violet: [[0,0,0],[20,0,40],[60,0,120],[139,0,255],[180,50,255],[220,120,255],[240,180,255],[255,255,255]],
+  ice: [[0,0,0],[0,10,30],[0,40,100],[0,120,200],[0,200,255],[100,230,255],[180,245,255],[255,255,255]]
+};
+
+function init() {
+  initAudio();
+  initThreeJS();
+  initUI();
+  initSpectrogram();
+  setTimeout(() => document.getElementById('loading-overlay').classList.add('hidden'), 1500);
+  animate();
+}
+
+function initAudio() {
+  APP.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  APP.analyser = APP.audioCtx.createAnalyser();
+  APP.analyser.fftSize = APP.fftSize;
+  APP.analyser.smoothingTimeConstant = 0.7;
+  APP.analyser.connect(APP.audioCtx.destination);
+  APP.frequencyData = new Uint8Array(APP.analyser.frequencyBinCount);
+  APP.timeDomainData = new Uint8Array(APP.analyser.frequencyBinCount);
+  APP.prevSpectrum = new Float32Array(APP.analyser.frequencyBinCount);
+}
+
+// Procedural concrete/ruin texture
+function createConcreteTexture(size, type) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  
+  if (type === 'color') {
+    // Base concrete color
+    ctx.fillStyle = '#1a1a24';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Noise grain
+    const imgData = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      const noise = (Math.random() - 0.5) * 40;
+      imgData.data[i] = Math.max(0, Math.min(255, imgData.data[i] + noise));
+      imgData.data[i+1] = Math.max(0, Math.min(255, imgData.data[i+1] + noise));
+      imgData.data[i+2] = Math.max(0, Math.min(255, imgData.data[i+2] + noise + 5));
+    }
+    ctx.putImageData(imgData, 0, 0);
+    
+    // Cracks and stains
+    for (let i = 0; i < 8; i++) {
+      ctx.strokeStyle = `rgba(${10 + Math.random()*20}, ${10 + Math.random()*15}, ${15 + Math.random()*20}, ${0.3 + Math.random()*0.4})`;
+      ctx.lineWidth = 0.5 + Math.random() * 2;
+      ctx.beginPath();
+      let x = Math.random() * size;
+      let y = Math.random() * size;
+      ctx.moveTo(x, y);
+      for (let j = 0; j < 5; j++) {
+        x += (Math.random() - 0.5) * size * 0.3;
+        y += (Math.random() - 0.5) * size * 0.3;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    
+    // Darker patches
+    for (let i = 0; i < 15; i++) {
+      const grd = ctx.createRadialGradient(
+        Math.random() * size, Math.random() * size, 0,
+        Math.random() * size, Math.random() * size, 20 + Math.random() * 40
+      );
+      grd.addColorStop(0, `rgba(0,0,0,${0.1 + Math.random()*0.2})`);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, size, size);
+    }
+    
+    // Rust streaks
+    for (let i = 0; i < 5; i++) {
+      ctx.strokeStyle = `rgba(${80 + Math.random()*40}, ${30 + Math.random()*20}, ${10 + Math.random()*15}, ${0.15 + Math.random()*0.2})`;
+      ctx.lineWidth = 1 + Math.random() * 3;
+      ctx.beginPath();
+      let x = Math.random() * size;
+      let y = 0;
+      ctx.moveTo(x, y);
+      while (y < size) {
+        x += (Math.random() - 0.5) * 8;
+        y += 5 + Math.random() * 10;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  } else if (type === 'bump') {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, size, size);
+    const imgData = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      const noise = (Math.random() - 0.5) * 80;
+      const v = 128 + noise;
+      imgData.data[i] = v;
+      imgData.data[i+1] = v;
+      imgData.data[i+2] = v;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    
+    // Deep cracks as dark lines in bump
+    for (let i = 0; i < 6; i++) {
+      ctx.strokeStyle = `rgba(0,0,0,${0.5 + Math.random()*0.3})`;
+      ctx.lineWidth = 1 + Math.random() * 2;
+      ctx.beginPath();
+      let x = Math.random() * size;
+      let y = Math.random() * size;
+      ctx.moveTo(x, y);
+      for (let j = 0; j < 4; j++) {
+        x += (Math.random() - 0.5) * size * 0.4;
+        y += (Math.random() - 0.5) * size * 0.4;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function initThreeJS() {
+  const viewport = document.getElementById('viewport');
+  const canvas = document.getElementById('three-canvas');
+  
+  APP.scene = new THREE.Scene();
+  APP.scene.fog = new THREE.FogExp2(0x050510, 0.018);
+  
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  
+  APP.camera = new THREE.PerspectiveCamera(APP.settings.fov, w / h, 0.1, 200);
+  APP.camera.position.set(0, 8, 15);
+  APP.camera.lookAt(0, 0, 0);
+  
+  APP.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  APP.renderer.setSize(w, h);
+  APP.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  APP.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  APP.renderer.toneMappingExposure = 1.2;
+  
+  APP.clock = new THREE.Clock();
+  
+  const ambient = new THREE.AmbientLight(0x111122, 0.4);
+  APP.scene.add(ambient);
+  
+  createCymaticPlate();
+  createParticleSystem();
+  createRuinsEnvironment();
+  createNeonLights();
+  createVolumetricFog();
+  
+  window.addEventListener('resize', onResize);
+}
+
+function createCymaticPlate() {
+  // Large plate covering the whole scene
+  const segments = 200;
+  const size = 60;
+  const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+  
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uBass: { value: 0 },
+      uMid: { value: 0 },
+      uTreble: { value: 0 },
+      uSub: { value: 0 },
+      uIntensity: { value: 0.75 },
+      uComplexity: { value: 5 },
+      uDisplacement: { value: 0.6 },
+      uPatternSpeed: { value: 0.5 },
+      uMode: { value: 0 }, // 0=chladni, 1=heightfield, 2=modal, 3=evolving
+      uColor1: { value: new THREE.Color(0x00f0ff) },
+      uColor2: { value: new THREE.Color(0xff00aa) },
+      uColor3: { value: new THREE.Color(0x39ff14) },
+      uBeat: { value: 0 }
+    },
+    vertexShader: `
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uTreble;
+      uniform float uSub;
+      uniform float uIntensity;
+      uniform float uComplexity;
+      uniform float uDisplacement;
+      uniform float uPatternSpeed;
+      uniform float uMode;
+      uniform float uBeat;
+      
+      varying vec2 vUv;
+      varying float vDisplacement;
+      varying vec3 vNormal;
+      varying vec3 vWorldPos;
+      varying float vPattern;
+      
+      // Chladni pattern - multiple modes blended
+      float chladniMode(vec2 p, float n, float m) {
+        return cos(n * 3.14159 * p.x) * cos(m * 3.14159 * p.y) 
+             - cos(m * 3.14159 * p.x) * cos(n * 3.14159 * p.y);
+      }
+      
+      // Evolving pattern that morphs between modes
+      float evolvingPattern(vec2 p, float time, float complexity) {
+        float phase = time * 0.15;
+        float n1 = floor(mod(phase, 8.0)) + 1.0;
+        float n2 = floor(mod(phase + 1.0, 8.0)) + 1.0;
+        float m1 = floor(mod(phase * 1.3, 8.0)) + 2.0;
+        float m2 = floor(mod(phase * 1.3 + 1.0, 8.0)) + 2.0;
+        float blend = fract(phase);
+        blend = smoothstep(0.0, 1.0, blend);
+        
+        float p1 = chladniMode(p, n1, m1);
+        float p2 = chladniMode(p, n2, m2);
+        return mix(p1, p2, blend);
+      }
+      
+      void main() {
+        vUv = uv;
+        vec3 pos = position;
+        
+        // Scale UV to [-1, 1] centered
+        vec2 p = (uv - 0.5) * 2.0;
+        float dist = length(p);
+        float angle = atan(p.y, p.x);
+        
+        float disp = 0.0;
+        float pattern = 0.0;
+        float t = uTime * uPatternSpeed;
+        float c = uComplexity;
+        
+        if (uMode < 0.5) {
+          // Chladni mode - evolving patterns
+          pattern = evolvingPattern(p * (0.8 + uMid * 0.5), t, c);
+          disp = pattern * (0.5 + uMid * 1.5);
+          
+          // Add bass-driven radial waves
+          disp += sin(dist * 8.0 - t * 2.0) * uBass * 0.8 * exp(-dist * 0.5);
+          
+          // Treble fine detail
+          disp += sin(p.x * 15.0 + t * 3.0) * sin(p.y * 15.0 - t * 2.0) * uTreble * 0.3;
+        } 
+        else if (uMode < 1.5) {
+          // Heightfield mode - layered waves
+          for(float i = 1.0; i < 8.0; i++) {
+            if(i > c) break;
+            float freq = i * (1.0 + uBass * 0.5);
+            float amp = (1.0 / i) * (0.5 + uMid);
+            float phase = t * (0.5 + i * 0.2);
+            vec2 dir = vec2(cos(i * 1.1), sin(i * 1.3));
+            disp += sin(dot(p, dir) * freq * 3.0 + phase) * amp;
+          }
+          pattern = disp;
+        }
+        else if (uMode < 2.5) {
+          // Modal synthesis - discrete modes
+          float totalAmp = 0.0;
+          for(float i = 1.0; i < 10.0; i++) {
+            if(i > c + 2.0) break;
+            float modeAmp = uMid * (1.0 / (i * 0.5));
+            float nx = i;
+            float ny = floor(mod(i * 1.618, 6.0)) + 1.0;
+            float mode = sin(nx * 3.14159 * p.x + t * 0.3) * sin(ny * 3.14159 * p.y + t * 0.2);
+            disp += mode * modeAmp;
+            totalAmp += modeAmp;
+          }
+          pattern = disp / max(totalAmp, 0.001);
+        }
+        else {
+          // Evolving auto-morph mode - continuously shifting patterns
+          float phase1 = t * 0.2;
+          float phase2 = t * 0.13;
+          float phase3 = t * 0.17;
+          
+          float n = 2.0 + sin(phase1) * 3.0 + uBass * 2.0;
+          float m = 3.0 + cos(phase2) * 3.0 + uMid * 2.0;
+          
+          // Rotating pattern
+          float rotAngle = t * 0.1 + uSub * 0.5;
+          vec2 rp = vec2(p.x * cos(rotAngle) - p.y * sin(rotAngle),
+                         p.x * sin(rotAngle) + p.y * cos(rotAngle));
+          
+          pattern = chladniMode(rp * (0.7 + sin(phase3) * 0.3), n, m);
+          
+          // Add secondary pattern
+          float n2 = 2.0 + cos(phase1 * 1.5) * 3.0;
+          float m2 = 3.0 + sin(phase2 * 1.5) * 3.0;
+          float pattern2 = chladniMode(rp * 1.3, n2, m2);
+          
+          float blend = 0.5 + 0.5 * sin(t * 0.3);
+          pattern = mix(pattern, pattern2, blend);
+          
+          disp = pattern * (0.8 + uMid * 1.2);
+          
+          // Radial pulse
+          disp += sin(dist * 6.0 - t * 3.0) * uBass * 0.6 * exp(-dist * 0.3);
+          
+          // Treble sparkles
+          disp += sin(p.x * 20.0 + t * 4.0) * sin(p.y * 20.0 - t * 3.0) * uTreble * 0.2;
+        }
+        
+        // Beat pulse - radial shockwave
+        disp += sin(dist * 12.0 - uTime * 8.0) * uBeat * 0.8 * exp(-dist * 1.5);
+        
+        disp *= uDisplacement * uIntensity;
+        
+        pos.z += disp;
+        
+        vDisplacement = disp;
+        vPattern = pattern;
+        vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
+        
+        // Approximate normal from neighbors
+        float eps = 0.02;
+        vec2 pEps = (uv - 0.5) * 2.0 + vec2(eps, 0.0);
+        float dxDisp = evolvingPattern(pEps, t, c) - evolvingPattern((uv - 0.5) * 2.0 - vec2(eps, 0.0), t, c);
+        vec2 pEpsY = (uv - 0.5) * 2.0 + vec2(0.0, eps);
+        float dyDisp = evolvingPattern(pEpsY, t, c) - evolvingPattern((uv - 0.5) * 2.0 - vec2(0.0, eps), t, c);
+        vNormal = normalize(vec3(-dxDisp * uDisplacement * 10.0, -dyDisp * uDisplacement * 10.0, 1.0));
+        
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uTreble;
+      uniform float uBeat;
+      uniform vec3 uColor1;
+      uniform vec3 uColor2;
+      uniform vec3 uColor3;
+      
+      varying vec2 vUv;
+      varying float vDisplacement;
+      varying vec3 vNormal;
+      varying vec3 vWorldPos;
+      varying float vPattern;
+      
+      void main() {
+        float d = abs(vDisplacement);
+        
+        // Multi-tone color based on displacement
+        vec3 col = vec3(0.02, 0.02, 0.04); // dark base
+        col = mix(col, uColor1 * 0.4, smoothstep(0.0, 0.15, d));
+        col = mix(col, uColor1, smoothstep(0.15, 0.4, d));
+        col = mix(col, uColor2, smoothstep(0.4, 0.8, d));
+        col = mix(col, uColor3, smoothstep(0.8, 1.5, d));
+        
+        // Nodal lines - bright where pattern crosses zero
+        float nodal = 1.0 - smoothstep(0.0, 0.05, abs(vPattern));
+        col += uColor1 * nodal * 1.5 * (0.5 + uMid);
+        
+        // Anti-nodal peaks glow
+        float peak = smoothstep(0.6, 1.2, d);
+        col += uColor2 * peak * 0.8;
+        
+        // Rim lighting
+        float rim = 1.0 - max(0.0, dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)));
+        rim = pow(rim, 2.5);
+        col += uColor1 * rim * 0.6 * (1.0 + uBeat * 0.5);
+        
+        // Beat flash
+        col += vec3(1.0, 0.9, 1.0) * uBeat * 0.15 * exp(-d * 2.0);
+        
+        // Distance fade - edges darker
+        float edgeDist = length(vUv - 0.5) * 2.0;
+        float edgeFade = 1.0 - smoothstep(0.6, 1.0, edgeDist);
+        col *= edgeFade * 0.8 + 0.2;
+        
+        // Subtle grid lines for structure
+        vec2 grid = abs(fract(vWorldPos.xz * 0.5) - 0.5);
+        float gridLine = 1.0 - smoothstep(0.0, 0.02, min(grid.x, grid.y));
+        col += uColor1 * gridLine * 0.05 * (1.0 + uBass);
+        
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+    side: THREE.DoubleSide
+  });
+  
+  APP.cymaticMesh = new THREE.Mesh(geometry, material);
+  APP.cymaticMesh.rotation.x = -Math.PI / 2;
+  APP.cymaticMesh.position.y = -0.5;
+  APP.scene.add(APP.cymaticMesh);
+}
+
+function createParticleSystem() {
+  const count = APP.settings.particleDensity;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const r = 2 + Math.random() * 12;
+    positions[i * 3] = Math.cos(theta) * r;
+    positions[i * 3 + 1] = Math.random() * 8 - 1;
+    positions[i * 3 + 2] = Math.sin(theta) * r;
+    
+    velocities[i * 3] = (Math.random() - 0.5) * 0.02;
+    velocities[i * 3 + 1] = Math.random() * 0.02;
+    velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.02;
+    
+    const colorChoice = Math.random();
+    if (colorChoice < 0.33) {
+      colors[i * 3] = 0; colors[i * 3 + 1] = 0.94; colors[i * 3 + 2] = 1;
+    } else if (colorChoice < 0.66) {
+      colors[i * 3] = 1; colors[i * 3 + 1] = 0; colors[i * 3 + 2] = 0.67;
+    } else {
+      colors[i * 3] = 0.22; colors[i * 3 + 1] = 1; colors[i * 3 + 2] = 0.08;
+    }
+    
+    sizes[i] = 0.02 + Math.random() * 0.06;
+  }
+  
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uBass: { value: 0 },
+      uMid: { value: 0 },
+      uTreble: { value: 0 },
+      uBeat: { value: 0 },
+      uPixelRatio: { value: APP.renderer.getPixelRatio() }
+    },
+    vertexShader: `
+      attribute float size;
+      attribute vec3 color;
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uBeat;
+      uniform float uPixelRatio;
+      
+      varying vec3 vColor;
+      varying float vAlpha;
+      
+      void main() {
+        vColor = color;
+        
+        vec3 pos = position;
+        
+        float angle = uTime * 0.5 + length(pos.xz) * 0.3;
+        pos.x += sin(angle + pos.y * 2.0) * uMid * 0.5;
+        pos.z += cos(angle + pos.y * 2.0) * uMid * 0.5;
+        pos.y += sin(uTime + pos.x * 0.5) * uBass * 0.3;
+        
+        pos *= 1.0 + uBeat * 0.1;
+        
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        gl_PointSize = size * 200.0 * uPixelRatio * (1.0 + uBeat * 0.5) / -mvPosition.z;
+        gl_Position = projectionMatrix * mvPosition;
+        
+        vAlpha = smoothstep(60.0, 5.0, -mvPosition.z) * (0.5 + uBeat * 0.5);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if(d > 0.5) discard;
+        
+        float alpha = smoothstep(0.5, 0.1, d) * vAlpha;
+        vec3 col = vColor * (1.0 + smoothstep(0.3, 0.0, d) * 0.5);
+        
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  
+  APP.particleSystem = new THREE.Points(geometry, material);
+  APP.particleSystem._velocities = velocities;
+  APP.scene.add(APP.particleSystem);
+}
+
+function createRuinsEnvironment() {
+  APP.ruinsGroup = new THREE.Group();
+  
+  // Create procedural textures
+  const concreteColor = createConcreteTexture(512, 'color');
+  const concreteBump = createConcreteTexture(512, 'bump');
+  
+  const ruinMat = new THREE.MeshStandardMaterial({
+    map: concreteColor,
+    bumpMap: concreteBump,
+    bumpScale: 0.4,
+    roughness: 0.95,
+    metalness: 0.05,
+    color: 0x888890
+  });
+  
+  // Rusty metal material for accents
+  const rustColor = createConcreteTexture(256, 'color');
+  const rustMat = new THREE.MeshStandardMaterial({
+    map: rustColor,
+    bumpMap: concreteBump,
+    bumpScale: 0.3,
+    roughness: 0.8,
+    metalness: 0.4,
+    color: 0x664433
+  });
+  
+  // Pillars - textured
+  for (let i = 0; i < 14; i++) {
+    const angle = (i / 14) * Math.PI * 2;
+    const radius = 18 + Math.random() * 10;
+    const height = 4 + Math.random() * 10;
+    const width = 0.6 + Math.random() * 1.2;
+    
+    const pillarGeo = new THREE.BoxGeometry(width, height, width);
+    const mat = Math.random() > 0.7 ? rustMat : ruinMat;
+    const pillar = new THREE.Mesh(pillarGeo, mat);
+    pillar.position.set(
+      Math.cos(angle) * radius,
+      height / 2 - 1,
+      Math.sin(angle) * radius
+    );
+    pillar.rotation.y = Math.random() * 0.3;
+    pillar.rotation.z = (Math.random() - 0.5) * 0.15;
+    pillar.castShadow = true;
+    APP.ruinsGroup.add(pillar);
+    
+    // Add broken top to some pillars
+    if (Math.random() > 0.5) {
+      const capGeo = new THREE.BoxGeometry(width * 1.3, 0.3, width * 1.3);
+      const cap = new THREE.Mesh(capGeo, ruinMat);
+      cap.position.set(
+        pillar.position.x,
+        pillar.position.y + height / 2,
+        pillar.position.z
+      );
+      cap.rotation.y = pillar.rotation.y + Math.random() * 0.5;
+      cap.rotation.z = (Math.random() - 0.5) * 0.3;
+      APP.ruinsGroup.add(cap);
+    }
+  }
+  
+  // Broken walls
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2 + 0.3;
+    const radius = 22 + Math.random() * 10;
+    
+    const wallGeo = new THREE.BoxGeometry(
+      3 + Math.random() * 5,
+      2 + Math.random() * 6,
+      0.4
+    );
+    const wall = new THREE.Mesh(wallGeo, ruinMat);
+    wall.position.set(
+      Math.cos(angle) * radius,
+      Math.random() * 2,
+      Math.sin(angle) * radius
+    );
+    wall.rotation.y = angle + Math.PI / 2;
+    wall.rotation.z = (Math.random() - 0.5) * 0.2;
+    APP.ruinsGroup.add(wall);
+  }
+  
+  // Scattered debris
+  for (let i = 0; i < 40; i++) {
+    const size = 0.15 + Math.random() * 0.6;
+    const debrisGeo = new THREE.BoxGeometry(size, size * 0.4, size * 0.8);
+    const debris = new THREE.Mesh(debrisGeo, Math.random() > 0.8 ? rustMat : ruinMat);
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 5 + Math.random() * 25;
+    debris.position.set(
+      Math.cos(angle) * radius,
+      -0.5 + Math.random() * 0.3,
+      Math.sin(angle) * radius
+    );
+    debris.rotation.set(Math.random(), Math.random(), Math.random());
+    APP.ruinsGroup.add(debris);
+  }
+  
+  APP.scene.add(APP.ruinsGroup);
+}
+
+function createNeonLights() {
+  // Only lights - no visible emitters
+  const neonColors = [0x00f0ff, 0xff00aa, 0x39ff14, 0x8b00ff, 0x00f0ff, 0xff00aa, 0x39ff14, 0x8b00ff];
+  
+  for (let i = 0; i < 10; i++) {
+    const color = neonColors[i % neonColors.length];
+    const light = new THREE.PointLight(color, 3, 20);
+    
+    const angle = (i / 10) * Math.PI * 2;
+    const radius = 10 + Math.random() * 8;
+    light.position.set(
+      Math.cos(angle) * radius,
+      1 + Math.random() * 5,
+      Math.sin(angle) * radius
+    );
+    
+    APP.scene.add(light);
+    APP.neonLights.push({ 
+      light, 
+      baseIntensity: 3, 
+      color,
+      basePos: light.position.clone(),
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+  
+  // Add a few directional lights for rim lighting on ruins
+  const dirLight1 = new THREE.DirectionalLight(0x00f0ff, 0.3);
+  dirLight1.position.set(10, 10, 5);
+  APP.scene.add(dirLight1);
+  
+  const dirLight2 = new THREE.DirectionalLight(0xff00aa, 0.2);
+  dirLight2.position.set(-10, 8, -5);
+  APP.scene.add(dirLight2);
+}
+
+// Volumetric fog using animated planes with noise shader
+function createVolumetricFog() {
+  const fogShaderMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color(0x00f0ff) },
+      uOpacity: { value: 0.15 },
+      uDensity: { value: 0.5 }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      void main() {
+        vUv = uv;
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uDensity;
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      
+      // Simplex-like noise
+      vec3 hash3(vec2 p) {
+        vec3 q = vec3(dot(p, vec2(127.1, 311.7)),
+                      dot(p, vec2(269.5, 183.3)),
+                      dot(p, vec2(419.2, 371.9)));
+        return fract(sin(q) * 43758.5453);
+      }
+      
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        
+        float a = dot(hash3(i).xy, vec2(1.0));
+        float b = dot(hash3(i + vec2(1.0, 0.0)).xy, vec2(1.0));
+        float c = dot(hash3(i + vec2(0.0, 1.0)).xy, vec2(1.0));
+        float d = dot(hash3(i + vec2(1.0, 1.0)).xy, vec2(1.0));
+        
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+      
+      float fbm(vec2 p) {
+        float value = 0.0;
+        float amp = 0.5;
+        for(int i = 0; i < 5; i++) {
+          value += amp * noise(p);
+          p *= 2.0;
+          amp *= 0.5;
+        }
+        return value;
+      }
+      
+      void main() {
+        vec2 uv = vUv * 3.0;
+        
+        // Animated noise
+        float n = fbm(uv + uTime * 0.05);
+        float n2 = fbm(uv * 1.5 - uTime * 0.03 + 10.0);
+        float combined = n * n2;
+        
+        // Radial fade
+        float dist = length(vUv - 0.5) * 2.0;
+        float radialFade = 1.0 - smoothstep(0.3, 1.0, dist);
+        
+        // Vertical fade (stronger at bottom)
+        float vertFade = smoothstep(0.0, 0.5, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
+        
+        float alpha = combined * radialFade * vertFade * uOpacity * uDensity;
+        
+        // Color variation
+        vec3 col = uColor * (0.5 + combined * 0.5);
+        col += vec3(0.1, 0.0, 0.2) * n2;
+        
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending
+  });
+  
+  // Create multiple fog layers at different heights
+  const fogColors = [0x00f0ff, 0xff00aa, 0x8b00ff, 0x39ff14];
+  
+  for (let layer = 0; layer < 4; layer++) {
+    const fogGeo = new THREE.PlaneGeometry(80, 80);
+    const fogMat = fogShaderMaterial.clone();
+    fogMat.uniforms.uColor.value = new THREE.Color(fogColors[layer]);
+    fogMat.uniforms.uOpacity.value = 0.08 + layer * 0.02;
+    
+    const fogPlane = new THREE.Mesh(fogGeo, fogMat);
+    fogPlane.rotation.x = -Math.PI / 2;
+    fogPlane.position.y = 0.2 + layer * 1.5;
+    
+    APP.scene.add(fogPlane);
+    APP.volumetricFog.push(fogPlane);
+  }
+  
+  // Vertical fog columns
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 + 0.5;
+    const radius = 15 + Math.random() * 10;
+    
+    const colGeo = new THREE.PlaneGeometry(8, 15);
+    const colMat = fogShaderMaterial.clone();
+    colMat.uniforms.uColor.value = new THREE.Color(fogColors[i % fogColors.length]);
+    colMat.uniforms.uOpacity.value = 0.06;
+    
+    const colPlane = new THREE.Mesh(colGeo, colMat);
+    colPlane.position.set(
+      Math.cos(angle) * radius,
+      4,
+      Math.sin(angle) * radius
+    );
+    colPlane.rotation.y = angle + Math.PI / 2;
+    
+    APP.scene.add(colPlane);
+    APP.volumetricFog.push(colPlane);
+  }
+}
+
+function initSpectrogram() {
+  const canvas = document.getElementById('spectrogram-canvas');
+  const container = document.getElementById('spectrogram-container');
+  canvas.width = container.clientWidth * 2;
+  canvas.height = container.clientHeight * 2;
+  APP.spectrogramWidth = canvas.width;
+  APP.spectrogramHeight = canvas.height;
+  
+  for (let i = 0; i < APP.spectrogramWidth; i++) {
+    APP.spectrogramData.push(new Uint8Array(APP.analyser.frequencyBinCount));
+  }
+}
+
+function analyzeAudio() {
+  if (!APP.analyser) return;
+  
+  APP.analyser.getByteFrequencyData(APP.frequencyData);
+  APP.analyser.getByteTimeDomainData(APP.timeDomainData);
+  
+  const binCount = APP.analyser.frequencyBinCount;
+  const sampleRate = APP.audioCtx.sampleRate;
+  const binWidth = sampleRate / APP.fftSize;
+  
+  const bandRanges = {
+    sub: [20, 60], bass: [60, 250], lowmid: [250, 500],
+    mid: [500, 2000], himid: [2000, 6000], treble: [6000, 20000]
+  };
+  
+  for (const [band, [low, high]] of Object.entries(bandRanges)) {
+    const startBin = Math.floor(low / binWidth);
+    const endBin = Math.min(Math.floor(high / binWidth), binCount - 1);
+    let sum = 0, count = 0;
+    for (let i = startBin; i <= endBin; i++) { sum += APP.frequencyData[i]; count++; }
+    APP.bands[band] = count > 0 ? (sum / count) / 255 : 0;
+  }
+  
+  let rmsSum = 0;
+  for (let i = 0; i < binCount; i++) {
+    const val = APP.timeDomainData[i] / 128 - 1;
+    rmsSum += val * val;
+  }
+  APP.rms = Math.sqrt(rmsSum / binCount);
+  
+  let weightedSum = 0, totalEnergy = 0;
+  for (let i = 0; i < binCount; i++) {
+    const freq = i * binWidth;
+    const energy = APP.frequencyData[i];
+    weightedSum += freq * energy;
+    totalEnergy += energy;
+  }
+  APP.spectralCentroid = totalEnergy > 0 ? weightedSum / totalEnergy : 0;
+  
+  let flux = 0;
+  for (let i = 0; i < binCount; i++) {
+    const diff = APP.frequencyData[i] / 255 - APP.prevSpectrum[i];
+    flux += diff * diff;
+  }
+  APP.spectralFlux = Math.sqrt(flux / binCount);
+  
+  for (let i = 0; i < binCount; i++) {
+    APP.prevSpectrum[i] = APP.frequencyData[i] / 255;
+  }
+  
+  const bassEnergy = APP.bands.sub * 0.5 + APP.bands.bass * 0.5;
+  APP.beatEnergyAvg = APP.beatEnergyAvg * 0.95 + bassEnergy * 0.05;
+  
+  const currentTime = getCurrentTime();
+  if (bassEnergy > APP.beatEnergyAvg * APP.beatThreshold && currentTime - APP.lastBeatTime > 0.2) {
+    APP.beatCount++;
+    APP.lastBeatTime = currentTime;
+    APP.beatTimes.push(currentTime);
+    
+    if (APP.beatTimes.length > 4) {
+      const recentBeats = APP.beatTimes.slice(-8);
+      let intervals = [];
+      for (let i = 1; i < recentBeats.length; i++) intervals.push(recentBeats[i] - recentBeats[i-1]);
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      APP.detectedBPM = Math.round(60 / avgInterval);
+      if (APP.detectedBPM > 200) APP.detectedBPM = Math.round(APP.detectedBPM / 2);
+      if (APP.detectedBPM < 50) APP.detectedBPM = Math.round(APP.detectedBPM * 2);
+    }
+  }
+  
+  updateSpectrogram();
+}
+
+function updateSpectrogram() {
+  APP.spectrogramData.shift();
+  APP.spectrogramData.push(new Uint8Array(APP.frequencyData));
+  
+  const canvas = document.getElementById('spectrogram-canvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  
+  ctx.fillStyle = 'rgba(0,0,0,0.95)';
+  ctx.fillRect(0, 0, w, h);
+  
+  const palette = PALETTES[APP.settings.palette];
+  const binCount = APP.analyser.frequencyBinCount;
+  
+  for (let x = 0; x < w; x++) {
+    const dataIdx = Math.floor((x / w) * APP.spectrogramData.length);
+    const data = APP.spectrogramData[dataIdx];
+    if (!data) continue;
+    
+    for (let y = 0; y < h; y++) {
+      let binIdx;
+      const normalizedY = 1 - (y / h);
+      binIdx = APP.settings.freqScale === 'log' 
+        ? Math.floor(Math.pow(normalizedY, 2) * binCount)
+        : Math.floor(normalizedY * binCount);
+      binIdx = Math.min(binIdx, binCount - 1);
+      const value = data[binIdx] / 255;
+      
+      const palIdx = value * (palette.length - 1);
+      const idx0 = Math.floor(palIdx);
+      const idx1 = Math.min(idx0 + 1, palette.length - 1);
+      const t = palIdx - idx0;
+      
+      const r = Math.floor(palette[idx0][0] * (1 - t) + palette[idx1][0] * t);
+      const g = Math.floor(palette[idx0][1] * (1 - t) + palette[idx1][1] * t);
+      const b = Math.floor(palette[idx0][2] * (1 - t) + palette[idx1][2] * t);
+      
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+}
+
+function updateWaveform() {
+  const canvas = document.getElementById('waveform-canvas');
+  const container = document.getElementById('waveform-container');
+  if (canvas.width !== container.clientWidth * 2) {
+    canvas.width = container.clientWidth * 2;
+    canvas.height = container.clientHeight * 2;
+  }
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  
+  ctx.fillStyle = 'rgba(0,0,0,0.9)';
+  ctx.fillRect(0, 0, w, h);
+  
+  if (APP.audioBuffer) {
+    const data = APP.audioBuffer.getChannelData(0);
+    const step = Math.floor(data.length / w);
+    
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    
+    for (let x = 0; x < w; x++) {
+      let min = 1, max = -1;
+      for (let j = 0; j < step; j++) {
+        const val = data[x * step + j] || 0;
+        if (val < min) min = val;
+        if (val > max) max = val;
+      }
+      ctx.moveTo(x, (1 + min) * h / 2);
+      ctx.lineTo(x, (1 + max) * h / 2);
+    }
+    ctx.stroke();
+    
+    if (APP.isPlaying || APP.pauseTime > 0) {
+      const progress = getCurrentTime() / APP.audioBuffer.duration;
+      const px = progress * w;
+      ctx.strokeStyle = '#ff00aa';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, h);
+      ctx.stroke();
+    }
+  }
+}
+
+let beatPulse = 0;
+let frameCount = 0;
+let lastFPSTime = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  
+  const delta = APP.clock.getDelta();
+  const elapsed = APP.clock.getElapsedTime();
+  
+  frameCount++;
+  if (elapsed - lastFPSTime >= 1) {
+    document.getElementById('fps-counter').textContent = frameCount + ' FPS';
+    frameCount = 0;
+    lastFPSTime = elapsed;
+  }
+  
+  if (APP.isPlaying || APP.useMic) analyzeAudio();
+  
+  const timeSinceBeat = getCurrentTime() - APP.lastBeatTime;
+  beatPulse = Math.max(0, 1 - timeSinceBeat * 4);
+  
+  updateScene(elapsed, delta);
+  updateUI();
+  
+  APP.renderer.render(APP.scene, APP.camera);
+}
+
+function updateScene(time, delta) {
+  const bass = APP.bands.bass;
+  const mid = APP.bands.mid;
+  const treble = APP.bands.treble;
+  const sub = APP.bands.sub;
+  
+  // Update cymatic plate
+  if (APP.cymaticMesh) {
+    const u = APP.cymaticMesh.material.uniforms;
+    u.uTime.value = time;
+    u.uBass.value += (bass - u.uBass.value) * 0.15;
+    u.uMid.value += (mid - u.uMid.value) * 0.15;
+    u.uTreble.value += (treble - u.uTreble.value) * 0.2;
+    u.uSub.value += (sub - u.uSub.value) * 0.1;
+    u.uIntensity.value = APP.settings.cymIntensity;
+    u.uComplexity.value = APP.settings.cymComplexity;
+    u.uDisplacement.value = APP.settings.cymDisplace;
+    u.uPatternSpeed.value = APP.settings.cymSpeed;
+    u.uBeat.value += (beatPulse - u.uBeat.value) * 0.3;
+    
+    // Map mode to uniform
+    const modeMap = { chladni: 0, heightfield: 1, modal: 2, evolving: 3 };
+    u.uMode.value = modeMap[APP.settings.cymMode] || 0;
+  }
+  
+  // Update particles
+  if (APP.particleSystem) {
+    const u = APP.particleSystem.material.uniforms;
+    u.uTime.value = time;
+    u.uBass.value += (bass - u.uBass.value) * 0.1;
+    u.uMid.value += (mid - u.uMid.value) * 0.1;
+    u.uTreble.value += (treble - u.uTreble.value) * 0.15;
+    u.uBeat.value += (beatPulse - u.uBeat.value) * 0.3;
+    
+    const positions = APP.particleSystem.geometry.attributes.position.array;
+    const velocities = APP.particleSystem._velocities;
+    const count = positions.length / 3;
+    const speed = APP.settings.particleSpeed;
+    
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      positions[idx] += velocities[idx] * speed * (1 + bass * 2);
+      positions[idx + 1] += velocities[idx + 1] * speed * (1 + mid);
+      positions[idx + 2] += velocities[idx + 2] * speed * (1 + bass * 2);
+      
+      const dist = Math.sqrt(positions[idx] ** 2 + positions[idx + 2] ** 2);
+      if (dist > 25 || positions[idx + 1] > 12 || positions[idx + 1] < -2) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = 2 + Math.random() * 10;
+        positions[idx] = Math.cos(angle) * r;
+        positions[idx + 1] = Math.random() * 6;
+        positions[idx + 2] = Math.sin(angle) * r;
+      }
+      
+      if (APP.settings.modalAttraction && mid > 0.1) {
+        const modalX = Math.sin(time * 2 + i * 0.01) * 3 * mid;
+        const modalZ = Math.cos(time * 2 + i * 0.01) * 3 * mid;
+        positions[idx] += (modalX - positions[idx]) * 0.001 * mid;
+        positions[idx + 2] += (modalZ - positions[idx + 2]) * 0.001 * mid;
+      }
+    }
+    APP.particleSystem.geometry.attributes.position.needsUpdate = true;
+    APP.particleSystem.rotation.y = time * 0.08;
+  }
+  
+  // Update neon lights - pulse only, no visible emitters
+  APP.neonLights.forEach((nl, i) => {
+    const bandVal = i % 2 === 0 ? bass : treble;
+    nl.light.intensity = nl.baseIntensity * (0.4 + bandVal * 4 + beatPulse * 3);
+    
+    // Subtle position drift
+    nl.light.position.y = nl.basePos.y + Math.sin(time * 0.5 + nl.phase) * 0.5;
+  });
+  
+  // Update volumetric fog
+  if (APP.settings.volfog) {
+    APP.volumetricFog.forEach((fogPlane, i) => {
+      fogPlane.material.uniforms.uTime.value = time + i * 10;
+      fogPlane.material.uniforms.uDensity.value = APP.settings.fogDensity;
+      fogPlane.visible = true;
+      
+      // Gentle rotation for movement
+      if (fogPlane.rotation.x === -Math.PI / 2) {
+        fogPlane.rotation.z = time * 0.02 * (i % 2 === 0 ? 1 : -1);
+      } else {
+        fogPlane.rotation.y += 0.001 * (i % 2 === 0 ? 1 : -1);
+      }
+    });
+  } else {
+    APP.volumetricFog.forEach(fp => fp.visible = false);
+  }
+  
+  updateCamera(time, delta);
+}
+
+function updateCamera(time, delta) {
+  const preset = APP.settings.cameraPreset;
+  const bass = APP.bands.bass;
+  
+  switch (preset) {
+    case 'orbit':
+      APP.camera.position.x = Math.sin(time * 0.2) * 14;
+      APP.camera.position.z = Math.cos(time * 0.2) * 14;
+      APP.camera.position.y = 7 + Math.sin(time * 0.1) * 2 + bass * 2;
+      break;
+    case 'push':
+      const pushDist = 16 - bass * 5 - beatPulse * 3;
+      APP.camera.position.x = Math.sin(time * 0.15) * 3;
+      APP.camera.position.z = pushDist;
+      APP.camera.position.y = 5 + beatPulse * 2;
+      break;
+    case 'topdown':
+      APP.camera.position.x = Math.sin(time * 0.1) * 2;
+      APP.camera.position.z = Math.cos(time * 0.1) * 2;
+      APP.camera.position.y = 18 + bass * 3;
+      break;
+    case 'dramatic':
+      const angle = time * 0.3;
+      APP.camera.position.x = Math.sin(angle) * (12 + bass * 5);
+      APP.camera.position.z = Math.cos(angle) * (12 + bass * 5);
+      APP.camera.position.y = 3 + Math.sin(time * 0.5) * 4 + beatPulse * 3;
+      break;
+  }
+  
+  APP.camera.lookAt(0, 0, 0);
+  APP.camera.fov = APP.settings.fov + beatPulse * 5;
+  APP.camera.updateProjectionMatrix();
+}
+
+function updateUI() {
+  document.getElementById('band-sub').style.width = (APP.bands.sub * 100) + '%';
+  document.getElementById('band-bass').style.width = (APP.bands.bass * 100) + '%';
+  document.getElementById('band-lowmid').style.width = (APP.bands.lowmid * 100) + '%';
+  document.getElementById('band-mid').style.width = (APP.bands.mid * 100) + '%';
+  document.getElementById('band-himid').style.width = (APP.bands.himid * 100) + '%';
+  document.getElementById('band-treble').style.width = (APP.bands.treble * 100) + '%';
+  
+  document.getElementById('bpm-display').textContent = APP.detectedBPM || '--';
+  document.getElementById('beat-count').textContent = APP.beatCount;
+  document.getElementById('rms-display').textContent = APP.rms.toFixed(2);
+  document.getElementById('centroid-display').textContent = Math.round(APP.spectralCentroid);
+  
+  if (APP.audioBuffer) {
+    const current = getCurrentTime();
+    const duration = APP.audioBuffer.duration;
+    const progress = (current / duration) * 100;
+    document.getElementById('progress-fill').style.width = progress + '%';
+    
+    const curMin = Math.floor(current / 60);
+    const curSec = Math.floor(current % 60).toString().padStart(2, '0');
+    const durMin = Math.floor(duration / 60);
+    const durSec = Math.floor(duration % 60).toString().padStart(2, '0');
+    document.getElementById('time-display').textContent = `${curMin}:${curSec} / ${durMin}:${durSec}`;
+  }
+  
+  updateWaveform();
+}
+
+function initUI() {
+  const uploadArea = document.getElementById('upload-area');
+  const fileInput = document.getElementById('file-input');
+  
+  uploadArea.addEventListener('click', () => fileInput.click());
+  uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', (e) => { if (e.target.files.length) loadFile(e.target.files[0]); });
+  
+  document.getElementById('play-btn').addEventListener('click', togglePlayback);
+  
+  document.getElementById('progress-bar').addEventListener('click', (e) => {
+    if (!APP.audioBuffer) return;
+    const rect = e.target.getBoundingClientRect();
+    const progress = (e.clientX - rect.left) / rect.width;
+    seekTo(progress * APP.audioBuffer.duration);
+  });
+  
+  document.getElementById('waveform-container').addEventListener('click', (e) => {
+    if (!APP.audioBuffer) return;
+    const rect = e.target.getBoundingClientRect();
+    const progress = (e.clientX - rect.left) / rect.width;
+    seekTo(progress * APP.audioBuffer.duration);
+  });
+  
+  document.getElementById('loop-btn').addEventListener('click', () => {
+    APP.loopEnabled = !APP.loopEnabled;
+    document.getElementById('loop-btn').style.borderColor = APP.loopEnabled ? 'var(--cyan)' : '';
+    document.getElementById('loop-btn').style.color = APP.loopEnabled ? 'var(--cyan)' : '';
+    showNotification(APP.loopEnabled ? 'Loop enabled' : 'Loop disabled');
+  });
+  
+  document.getElementById('mic-btn').addEventListener('click', toggleMic);
+  
+  document.getElementById('meta-artist').addEventListener('input', updateTitleOverlay);
+  document.getElementById('meta-song').addEventListener('input', updateTitleOverlay);
+  
+  document.getElementById('freq-min').addEventListener('input', (e) => {
+    APP.settings.freqMin = parseInt(e.target.value);
+    document.getElementById('freq-range-val').textContent = `${APP.settings.freqMin}-${APP.settings.freqMax} Hz`;
+  });
+  document.getElementById('freq-max').addEventListener('input', (e) => {
+    APP.settings.freqMax = parseInt(e.target.value);
+    document.getElementById('freq-range-val').textContent = `${APP.settings.freqMin}-${APP.settings.freqMax} Hz`;
+  });
+  document.getElementById('freq-scale').addEventListener('change', (e) => APP.settings.freqScale = e.target.value);
+  
+  document.querySelectorAll('.palette-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      document.querySelectorAll('.palette-swatch').forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+      APP.settings.palette = swatch.dataset.palette;
+    });
+  });
+  
+  document.getElementById('cym-intensity').addEventListener('input', (e) => {
+    APP.settings.cymIntensity = parseInt(e.target.value) / 100;
+    document.getElementById('cym-intensity-val').textContent = e.target.value + '%';
+  });
+  document.getElementById('cym-complexity').addEventListener('input', (e) => {
+    APP.settings.cymComplexity = parseInt(e.target.value);
+    document.getElementById('cym-complexity-val').textContent = e.target.value;
+  });
+  document.getElementById('cym-displace').addEventListener('input', (e) => {
+    APP.settings.cymDisplace = parseInt(e.target.value) / 100;
+    document.getElementById('cym-displace-val').textContent = e.target.value + '%';
+  });
+  document.getElementById('cym-speed').addEventListener('input', (e) => {
+    APP.settings.cymSpeed = parseInt(e.target.value) / 100;
+    document.getElementById('cym-speed-val').textContent = e.target.value + '%';
+  });
+  document.getElementById('cym-mode').addEventListener('change', (e) => APP.settings.cymMode = e.target.value);
+  
+  document.getElementById('part-density').addEventListener('input', (e) => {
+    APP.settings.particleDensity = parseInt(e.target.value);
+    document.getElementById('part-density-val').textContent = e.target.value;
+  });
+  document.getElementById('part-speed').addEventListener('input', (e) => {
+    APP.settings.particleSpeed = parseInt(e.target.value) / 100;
+    document.getElementById('part-speed-val').textContent = e.target.value + '%';
+  });
+  
+  setupToggle('toggle-trails', (v) => APP.settings.trails = v);
+  setupToggle('toggle-modal', (v) => APP.settings.modalAttraction = v);
+  setupToggle('toggle-bloom', (v) => APP.settings.bloom = v);
+  setupToggle('toggle-chromatic', (v) => APP.settings.chromatic = v);
+  setupToggle('toggle-grain', (v) => APP.settings.grain = v);
+  setupToggle('toggle-vignette', (v) => APP.settings.vignette = v);
+  setupToggle('toggle-volfog', (v) => APP.settings.volfog = v);
+  
+  document.getElementById('bloom-strength').addEventListener('input', (e) => {
+    APP.settings.bloomStrength = parseInt(e.target.value) / 100;
+    document.getElementById('bloom-str-val').textContent = e.target.value + '%';
+  });
+  document.getElementById('fog-density').addEventListener('input', (e) => {
+    APP.settings.fogDensity = parseInt(e.target.value) / 100;
+    document.getElementById('fog-density-val').textContent = e.target.value + '%';
+  });
+  
+  document.getElementById('camera-preset').addEventListener('change', (e) => APP.settings.cameraPreset = e.target.value);
+  document.getElementById('camera-fov').addEventListener('input', (e) => {
+    APP.settings.fov = parseInt(e.target.value);
+    document.getElementById('fov-val').textContent = e.target.value + '°';
+  });
+  
+  document.querySelectorAll('.preset-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.preset-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      applyPreset(item.dataset.preset);
+    });
+  });
+  
+  document.getElementById('save-preset-btn').addEventListener('click', savePreset);
+  document.getElementById('load-preset-btn').addEventListener('click', () => {
+    const saved = localStorage.getItem('neonRuinsPreset');
+    if (saved) {
+      Object.assign(APP.settings, JSON.parse(saved));
+      syncUIFromSettings();
+      showNotification('Preset loaded');
+    } else showNotification('No saved preset found');
+  });
+  
+  document.getElementById('export-ae-btn').addEventListener('click', showAEExport);
+  document.getElementById('export-frame-btn').addEventListener('click', captureFrame);
+  document.getElementById('close-modal-btn').addEventListener('click', () => document.getElementById('export-modal').classList.remove('visible'));
+  document.getElementById('copy-ae-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('ae-json-output').value);
+    showNotification('Copied to clipboard');
+  });
+  document.getElementById('download-ae-btn').addEventListener('click', () => {
+    const blob = new Blob([document.getElementById('ae-json-output').value], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'neon_ruins_ae_manifest.json'; a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById('export-fps').addEventListener('change', (e) => APP.settings.fps = parseInt(e.target.value));
+}
+
+function setupToggle(id, callback) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', () => {
+    el.classList.toggle('active');
+    callback(el.classList.contains('active'));
+  });
+}
+
+function loadFile(file) {
+  showNotification('Loading: ' + file.name);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    APP.audioCtx.decodeAudioData(e.target.result, (buffer) => {
+      APP.audioBuffer = buffer;
+      if (APP.source) { APP.source.stop(); APP.source = null; }
+      APP.isPlaying = false;
+      APP.pauseTime = 0;
+      document.getElementById('play-btn').textContent = '▶';
+      APP.beatCount = 0; APP.beatTimes = []; APP.detectedBPM = 0; APP.lastBeatTime = 0;
+      
+      document.getElementById('file-info').innerHTML = `
+        <div style="color:var(--cyan)">${file.name}</div>
+        <div>${buffer.duration.toFixed(1)}s · ${(buffer.sampleRate/1000).toFixed(1)}kHz · ${buffer.numberOfChannels}ch</div>
+      `;
+      
+      const name = file.name.replace(/\.(wav|mp3|ogg)$/i, '');
+      if (!document.getElementById('meta-artist').value) {
+        const parts = name.split(' - ');
+        if (parts.length >= 2) {
+          document.getElementById('meta-artist').value = parts[0].trim();
+          document.getElementById('meta-song').value = parts[1].trim();
+        } else document.getElementById('meta-song').value = name;
+        updateTitleOverlay();
+      }
+      showNotification('Audio loaded successfully');
+    }, (err) => { showNotification('Error decoding audio'); console.error(err); });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function togglePlayback() {
+  if (APP.audioCtx.state === 'suspended') APP.audioCtx.resume();
+  if (!APP.audioBuffer) { showNotification('Please load an audio file first'); return; }
+  
+  if (APP.isPlaying) {
+    APP.pauseTime = getCurrentTime();
+    APP.source.stop(); APP.source = null;
+    APP.isPlaying = false;
+    document.getElementById('play-btn').textContent = '▶';
+  } else {
+    const offset = APP.pauseTime || 0;
+    APP.source = APP.audioCtx.createBufferSource();
+    APP.source.buffer = APP.audioBuffer;
+    APP.source.connect(APP.analyser);
+    APP.source.loop = APP.loopEnabled;
+    APP.source.start(0, offset);
+    APP.startTime = APP.audioCtx.currentTime - offset;
+    APP.isPlaying = true;
+    document.getElementById('play-btn').textContent = '⏸';
+    showTitleCard();
+    APP.source.onended = () => {
+      if (APP.isPlaying && !APP.loopEnabled) {
+        APP.isPlaying = false; APP.pauseTime = 0;
+        document.getElementById('play-btn').textContent = '▶';
+      }
+    };
+  }
+}
+
+function toggleMic() {
+  if (APP.useMic) {
+    APP.useMic = false;
+    document.getElementById('mic-btn').style.borderColor = '';
+    document.getElementById('mic-btn').style.color = '';
+    showNotification('Microphone disabled');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    if (APP.micSource) APP.micSource.disconnect();
+    APP.micSource = APP.audioCtx.createMediaStreamSource(stream);
+    APP.micSource.connect(APP.analyser);
+    APP.useMic = true;
+    document.getElementById('mic-btn').style.borderColor = 'var(--green)';
+    document.getElementById('mic-btn').style.color = 'var(--green)';
+    showNotification('Microphone active');
+  }).catch(() => showNotification('Microphone access denied'));
+}
+
+function getCurrentTime() {
+  if (APP.useMic) return APP.audioCtx.currentTime;
+  if (!APP.isPlaying) return APP.pauseTime || 0;
+  return APP.audioCtx.currentTime - APP.startTime;
+}
+
+function seekTo(time) {
+  if (!APP.audioBuffer) return;
+  const wasPlaying = APP.isPlaying;
+  if (APP.source) { APP.source.stop(); APP.source = null; }
+  APP.pauseTime = Math.max(0, Math.min(time, APP.audioBuffer.duration));
+  if (wasPlaying) {
+    APP.source = APP.audioCtx.createBufferSource();
+    APP.source.buffer = APP.audioBuffer;
+    APP.source.connect(APP.analyser);
+    APP.source.loop = APP.loopEnabled;
+    APP.source.start(0, APP.pauseTime);
+    APP.startTime = APP.audioCtx.currentTime - APP.pauseTime;
+  }
+}
+
+function updateTitleOverlay() {
+  document.getElementById('display-artist').textContent = document.getElementById('meta-artist').value;
+  document.getElementById('display-song').textContent = document.getElementById('meta-song').value;
+}
+
+function showTitleCard() {
+  const overlay = document.getElementById('title-overlay');
+  overlay.classList.add('visible');
+  setTimeout(() => overlay.classList.remove('visible'), 5000);
+}
+
+function onResize() {
+  const viewport = document.getElementById('viewport');
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  APP.camera.aspect = w / h;
+  APP.camera.updateProjectionMatrix();
+  APP.renderer.setSize(w, h);
+}
+
+function applyPreset(name) {
+  const presets = {
+    default: { cymIntensity: 0.75, cymComplexity: 5, cymDisplace: 0.6, cymSpeed: 0.5, cymMode: 'chladni', particleDensity: 2000, particleSpeed: 0.5, trails: true, modalAttraction: true, bloom: true, chromatic: true, grain: false, vignette: true, volfog: true, bloomStrength: 0.6, fogDensity: 0.5, cameraPreset: 'orbit', fov: 60, palette: 'neon' },
+    cyberpunk: { cymIntensity: 0.9, cymComplexity: 8, cymDisplace: 0.8, cymSpeed: 0.7, cymMode: 'evolving', particleDensity: 5000, particleSpeed: 0.7, trails: true, modalAttraction: true, bloom: true, chromatic: true, grain: true, vignette: true, volfog: true, bloomStrength: 0.8, fogDensity: 0.7, cameraPreset: 'dramatic', fov: 75, palette: 'neon' },
+    minimal: { cymIntensity: 0.4, cymComplexity: 3, cymDisplace: 0.3, cymSpeed: 0.3, cymMode: 'heightfield', particleDensity: 500, particleSpeed: 0.2, trails: false, modalAttraction: false, bloom: true, chromatic: false, grain: false, vignette: true, volfog: true, bloomStrength: 0.3, fogDensity: 0.3, cameraPreset: 'topdown', fov: 50, palette: 'ice' },
+    intense: { cymIntensity: 1.0, cymComplexity: 12, cymDisplace: 1.0, cymSpeed: 0.9, cymMode: 'modal', particleDensity: 8000, particleSpeed: 1.0, trails: true, modalAttraction: true, bloom: true, chromatic: true, grain: true, vignette: true, volfog: true, bloomStrength: 1.0, fogDensity: 0.8, cameraPreset: 'push', fov: 90, palette: 'fire' }
+  };
+  if (presets[name]) {
+    Object.assign(APP.settings, presets[name]);
+    syncUIFromSettings();
+    showNotification('Preset applied: ' + name);
+  }
+}
+
+function syncUIFromSettings() {
+  document.getElementById('cym-intensity').value = APP.settings.cymIntensity * 100;
+  document.getElementById('cym-intensity-val').textContent = Math.round(APP.settings.cymIntensity * 100) + '%';
+  document.getElementById('cym-complexity').value = APP.settings.cymComplexity;
+  document.getElementById('cym-complexity-val').textContent = APP.settings.cymComplexity;
+  document.getElementById('cym-displace').value = APP.settings.cymDisplace * 100;
+  document.getElementById('cym-displace-val').textContent = Math.round(APP.settings.cymDisplace * 100) + '%';
+  document.getElementById('cym-speed').value = APP.settings.cymSpeed * 100;
+  document.getElementById('cym-speed-val').textContent = Math.round(APP.settings.cymSpeed * 100) + '%';
+  document.getElementById('cym-mode').value = APP.settings.cymMode;
+  document.getElementById('part-density').value = APP.settings.particleDensity;
+  document.getElementById('part-density-val').textContent = APP.settings.particleDensity;
+  document.getElementById('part-speed').value = APP.settings.particleSpeed * 100;
+  document.getElementById('part-speed-val').textContent = Math.round(APP.settings.particleSpeed * 100) + '%';
+  document.getElementById('bloom-strength').value = APP.settings.bloomStrength * 100;
+  document.getElementById('bloom-str-val').textContent = Math.round(APP.settings.bloomStrength * 100) + '%';
+  document.getElementById('fog-density').value = APP.settings.fogDensity * 100;
+  document.getElementById('fog-density-val').textContent = Math.round(APP.settings.fogDensity * 100) + '%';
+  document.getElementById('camera-preset').value = APP.settings.cameraPreset;
+  document.getElementById('camera-fov').value = APP.settings.fov;
+  document.getElementById('fov-val').textContent = APP.settings.fov + '°';
+  
+  setToggle('toggle-trails', APP.settings.trails);
+  setToggle('toggle-modal', APP.settings.modalAttraction);
+  setToggle('toggle-bloom', APP.settings.bloom);
+  setToggle('toggle-chromatic', APP.settings.chromatic);
+  setToggle('toggle-grain', APP.settings.grain);
+  setToggle('toggle-vignette', APP.settings.vignette);
+  setToggle('toggle-volfog', APP.settings.volfog);
+  
+  document.querySelectorAll('.palette-swatch').forEach(s => {
+    s.classList.toggle('active', s.dataset.palette === APP.settings.palette);
+  });
+}
+
+function setToggle(id, value) {
+  const el = document.getElementById(id);
+  if (value) el.classList.add('active'); else el.classList.remove('active');
+}
+
+function savePreset() {
+  localStorage.setItem('neonRuinsPreset', JSON.stringify(APP.settings));
+  showNotification('Preset saved');
+}
+
+function showAEExport() {
+  const manifest = generateAEManifest();
+  document.getElementById('ae-json-output').value = JSON.stringify(manifest, null, 2);
+  document.getElementById('export-modal').classList.add('visible');
+}
+
+function generateAEManifest() {
+  const artist = document.getElementById('meta-artist').value || 'Unknown Artist';
+  const song = document.getElementById('meta-song').value || 'Unknown Title';
+  return {
+    version: "1.0", generator: "NEON RUINS Music Visualizer",
+    composition: { name: `${artist} - ${song}`, width: 1080, height: 1920, fps: APP.settings.fps, duration: APP.audioBuffer ? APP.audioBuffer.duration : 0 },
+    metadata: { artist, song, bpm: APP.detectedBPM || null, beatTimestamps: APP.beatTimes.slice(0, 100) },
+    camera: { preset: APP.settings.cameraPreset, fov: APP.settings.fov, keyframes: generateCameraKeyframes() },
+    cymatics: { intensity: APP.settings.cymIntensity, complexity: APP.settings.cymComplexity, displacement: APP.settings.cymDisplace, mode: APP.settings.cymMode, patternSpeed: APP.settings.cymSpeed },
+    particles: { density: APP.settings.particleDensity, speed: APP.settings.particleSpeed, trails: APP.settings.trails, modalAttraction: APP.settings.modalAttraction },
+    postEffects: { bloom: APP.settings.bloom, bloomStrength: APP.settings.bloomStrength, chromaticAberration: APP.settings.chromatic, filmGrain: APP.settings.grain, vignette: APP.settings.vignette, volumetricFog: APP.settings.volfog, fogDensity: APP.settings.fogDensity },
+    spectrogram: { palette: APP.settings.palette, freqMin: APP.settings.freqMin, freqMax: APP.settings.freqMax, scale: APP.settings.freqScale },
+    colors: { primary: "#00f0ff", secondary: "#ff00aa", accent: "#39ff14", background: "#050508" }
+  };
+}
+
+function generateCameraKeyframes() {
+  const keyframes = [];
+  const duration = APP.audioBuffer ? APP.audioBuffer.duration : 60;
+  for (let t = 0; t < duration; t += 2) {
+    const beatInfluence = APP.beatTimes.filter(bt => Math.abs(bt - t) < 0.5).length > 0 ? 1 : 0;
+    keyframes.push({
+      time: t,
+      position: { x: Math.sin(t * 0.2) * 12, y: 6 + Math.sin(t * 0.1) * 2 + beatInfluence * 2, z: Math.cos(t * 0.2) * 12 },
+      rotation: { x: 0, y: 0, z: 0 }, fov: APP.settings.fov + beatInfluence * 5
+    });
+  }
+  return keyframes;
+}
+
+function captureFrame() {
+  APP.renderer.render(APP.scene, APP.camera);
+  const dataURL = APP.renderer.domElement.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = dataURL; a.download = 'neon_ruins_frame.png'; a.click();
+  showNotification('Frame captured');
+}
+
+function showNotification(msg) {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
