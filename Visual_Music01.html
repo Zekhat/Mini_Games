@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANDROID HUD - INTERACTIVE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .tiktok-container {
+    width: 100vw;
+    max-width: 450px;
+    aspect-ratio: 9/16;
+    position: relative;
+    overflow: hidden;
+    background: #0a0a0a;
+    transition: filter 0.1s;
+  }
+
+  .base-image {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+  }
+
+  /* ============ EFECTOS SOBRE LA PIEL ============ */
+  .skin-effects {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Venas negras */
+  .veins-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    opacity: 0;
+    transition: opacity 0.5s ease-in;
+  }
+
+  .veins-svg.active { opacity: 1; }
+
+  .vein-path {
+    fill: none;
+    stroke: #000;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 2px rgba(80, 0, 40, 0.8)) drop-shadow(0 0 4px rgba(120, 0, 60, 0.5));
+    stroke-dasharray: 300;
+    stroke-dashoffset: 300;
+    animation: veinDraw 2s ease-out forwards;
+  }
+
+  .vein-path.v2 { animation-delay: 0.2s; stroke-width: 1; }
+  .vein-path.v3 { animation-delay: 0.4s; stroke-width: 1.2; }
+  .vein-path.v4 { animation-delay: 0.6s; stroke-width: 0.8; }
+  .vein-path.v5 { animation-delay: 0.8s; stroke-width: 1; }
+  .vein-path.v6 { animation-delay: 1s; stroke-width: 0.7; }
+  .vein-path.v7 { animation-delay: 1.2s; stroke-width: 0.9; }
+  .vein-path.v8 { animation-delay: 0.3s; stroke-width: 0.6; }
+
+  @keyframes veinDraw {
+    0% { stroke-dashoffset: 300; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  /* Mofletes colorados */
+  .cheek {
+    position: absolute;
+    width: 70px;
+    height: 50px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255, 80, 120, 0.65), rgba(255, 50, 100, 0.3) 50%, transparent 75%);
+    filter: blur(12px);
+    opacity: 0;
+    transition: opacity 0.8s ease-in;
+    z-index: 6;
+  }
+
+  .cheek.active { opacity: 1; }
+
+  .cheek.left {
+    top: 40%;
+    left: 22%;
+  }
+
+  .cheek.right {
+    top: 40%;
+    right: 22%;
+  }
+
+  /* Distorsión (pastilla) */
+  .tiktok-container.distort {
+    animation: distortEffect 1.5s ease-in-out;
+  }
+
+  @keyframes distortEffect {
+    0% { filter: blur(0) hue-rotate(0) saturate(1) contrast(1); transform: scale(1) skew(0); }
+    10% { filter: blur(3px) hue-rotate(90deg) saturate(3) contrast(1.5); transform: scale(1.02) skew(2deg); }
+    20% { filter: blur(1px) hue-rotate(-60deg) saturate(2) contrast(1.8); transform: scale(0.98) skew(-3deg); }
+    30% { filter: blur(5px) hue-rotate(180deg) saturate(4) contrast(2); transform: scale(1.05) skew(4deg); }
+    40% { filter: blur(2px) hue-rotate(-120deg) saturate(2.5) contrast(1.3); transform: scale(0.96) skew(-2deg); }
+    50% { filter: blur(4px) hue-rotate(45deg) saturate(3.5) contrast(1.7); transform: scale(1.03) skew(1deg); }
+    60% { filter: blur(1px) hue-rotate(-90deg) saturate(2) contrast(1.2); transform: scale(0.99) skew(-1deg); }
+    75% { filter: blur(2px) hue-rotate(30deg) saturate(1.5) contrast(1.1); transform: scale(1.01); }
+    100% { filter: blur(0) hue-rotate(0) saturate(1) contrast(1); transform: scale(1) skew(0); }
+  }
+
+  /* Flash al activar efecto */
+  .effect-flash {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 7;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .effect-flash.hate {
+    background: radial-gradient(circle at center, rgba(80, 0, 40, 0.4), transparent 70%);
+    animation: flashHate 1s ease-out;
+  }
+
+  .effect-flash.love {
+    background: radial-gradient(circle at center, rgba(255, 100, 150, 0.3), transparent 70%);
+    animation: flashLove 1s ease-out;
+  }
+
+  @keyframes flashHate {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes flashLove {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* ============ HUD OVERLAY ============ */
+  .scanlines {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 200, 0.03) 2px, rgba(0, 255, 200, 0.03) 4px);
+    animation: scanMove 8s linear infinite;
+  }
+
+  @keyframes scanMove {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100px; }
+  }
+
+  .h-scan {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(0,255,200,0.6), rgba(0,200,255,0.8), rgba(0,255,200,0.6), transparent);
+    z-index: 15;
+    animation: hScan 4s ease-in-out infinite;
+    box-shadow: 0 0 15px rgba(0,255,200,0.5);
+  }
+
+  @keyframes hScan {
+    0% { top: -5%; }
+    100% { top: 105%; }
+  }
+
+  .glitch-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 12;
+    pointer-events: none;
+    animation: glitchFlicker 0.15s infinite;
+  }
+
+  @keyframes glitchFlicker {
+    0%, 95%, 100% { opacity: 0; }
+    96% { opacity: 1; background: rgba(255,0,100,0.05); transform: translateX(-2px); }
+    97% { opacity: 1; background: rgba(0,255,200,0.05); transform: translateX(2px); }
+    98% { opacity: 1; background: rgba(0,100,255,0.05); transform: translateX(-1px); }
+  }
+
+  .corner {
+    position: absolute;
+    width: 60px; height: 60px;
+    z-index: 20;
+  }
+  .corner-tl { top: 15px; left: 15px; border-top: 2px solid #00ffc8; border-left: 2px solid #00ffc8; }
+  .corner-tr { top: 15px; right: 15px; border-top: 2px solid #00ffc8; border-right: 2px solid #00ffc8; }
+  .corner-bl { bottom: 15px; left: 15px; border-bottom: 2px solid #00ffc8; border-left: 2px solid #00ffc8; }
+  .corner-br { bottom: 15px; right: 15px; border-bottom: 2px solid #00ffc8; border-right: 2px solid #00ffc8; }
+
+  .corner::after {
+    content: '';
+    position: absolute;
+    width: 8px; height: 8px;
+    background: #00ffc8;
+    animation: cornerPulse 2s ease-in-out infinite;
+  }
+  .corner-tl::after { top: -4px; left: -4px; }
+  .corner-tr::after { top: -4px; right: -4px; }
+  .corner-bl::after { bottom: -4px; left: -4px; }
+  .corner-br::after { bottom: -4px; right: -4px; }
+
+  @keyframes cornerPulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 5px #00ffc8; }
+    50% { opacity: 0.3; box-shadow: 0 0 15px #00ffc8; }
+  }
+
+  .top-hud {
+    position: absolute;
+    top: 20px; left: 20px; right: 20px;
+    z-index: 20;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .hud-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    color: #00ffc8;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.9;
+    text-shadow: 0 0 10px rgba(0,255,200,0.5);
+  }
+
+  .hud-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    color: #fff;
+    text-shadow: 0 0 8px rgba(0,255,200,0.7);
+  }
+
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #00ff88;
+    animation: dotBlink 1s ease-in-out infinite;
+    box-shadow: 0 0 8px #00ff88;
+  }
+
+  @keyframes dotBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .left-panel {
+    position: absolute;
+    top: 120px; left: 15px;
+    z-index: 20;
+    width: 160px;
+  }
+
+  .panel-box {
+    border: 1px solid rgba(0,255,200,0.3);
+    background: rgba(0,20,15,0.6);
+    backdrop-filter: blur(2px);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, #00ffc8, #0088ff);
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 7px;
+    color: #00ffc8;
+    letter-spacing: 1.5px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(0,255,200,0.1);
+  }
+
+  .data-label { color: rgba(0,255,200,0.7); font-size: 9px; }
+  .data-val { color: #fff; font-size: 11px; }
+
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(0,255,200,0.15);
+    margin: 4px 0;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ffc8, #0088ff);
+    animation: progressAnim 3s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(0,255,200,0.5);
+  }
+
+  @keyframes progressAnim {
+    0% { width: 20%; }
+    50% { width: 85%; }
+    100% { width: 20%; }
+  }
+
+  .progress-fill.p2 { animation-delay: -1s; animation-duration: 4s; }
+  .progress-fill.p3 { animation-delay: -2s; animation-duration: 2.5s; }
+
+  .right-panel {
+    position: absolute;
+    top: 120px; right: 15px;
+    z-index: 20;
+    width: 140px;
+  }
+
+  .audio-viz {
+    position: absolute;
+    bottom: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 50px;
+  }
+
+  .audio-bar {
+    width: 4px;
+    background: linear-gradient(180deg, #00ffc8, #0088ff, #ff0066);
+    animation: audioWave 0.8s ease-in-out infinite;
+    border-radius: 2px;
+    box-shadow: 0 0 4px rgba(0,255,200,0.5);
+  }
+
+  @keyframes audioWave {
+    0%, 100% { height: 8px; }
+    50% { height: 40px; }
+  }
+
+  .bottom-hud {
+    position: absolute;
+    bottom: 110px; left: 20px; right: 20px;
+    z-index: 20;
+  }
+
+  .bottom-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid rgba(0,255,200,0.3);
+    background: rgba(0,20,15,0.7);
+    backdrop-filter: blur(3px);
+  }
+
+  .bottom-text {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    color: #00ffc8;
+    letter-spacing: 2px;
+  }
+
+  .bottom-code {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: #fff;
+    text-shadow: 0 0 8px rgba(0,255,200,0.5);
+  }
+
+  .glitch-text {
+    position: absolute;
+    z-index: 25;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 28px;
+    color: #fff;
+    text-shadow: 2px 0 #ff0066, -2px 0 #00ffff;
+    animation: glitchText 3s infinite;
+    letter-spacing: 4px;
+  }
+
+  .glitch-text.top-title {
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 16px;
+    text-shadow: 1px 0 #ff0066, -1px 0 #00ffff;
+  }
+
+  @keyframes glitchText {
+    0%, 90%, 100% { transform: translateX(-50%) translate(0); opacity: 1; }
+    91% { transform: translateX(-50%) translate(-3px, 1px); opacity: 0.8; }
+    92% { transform: translateX(-50%) translate(3px, -1px); opacity: 0.9; }
+    93% { transform: translateX(-50%) translate(-1px, 2px); opacity: 1; }
+    94% { transform: translateX(-50%) translate(2px, -2px); opacity: 0.7; }
+    95% { transform: translateX(-50%) translate(0); opacity: 1; }
+  }
+
+  .circle-hud {
+    position: absolute;
+    z-index: 18;
+    border: 1px solid rgba(0,255,200,0.4);
+    border-radius: 50%;
+    animation: circleRotate 10s linear infinite;
+  }
+
+  .circle-hud.c1 {
+    width: 200px; height: 200px;
+    top: 45%; left: 50%;
+    transform: translate(-50%, -50%);
+    border-style: dashed;
+  }
+
+  .circle-hud.c2 {
+    width: 280px; height: 280px;
+    top: 45%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation-direction: reverse;
+    animation-duration: 15s;
+    border-color: rgba(0,136,255,0.2);
+  }
+
+  @keyframes circleRotate {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  .hex-rain {
+    position: absolute;
+    z-index: 16;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    color: rgba(0,255,200,0.4);
+    writing-mode: vertical-rl;
+    animation: hexFall 5s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes hexFall {
+    0% { transform: translateY(-100%); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(100vh); opacity: 0; }
+  }
+
+  .waveform {
+    position: absolute;
+    bottom: 170px;
+    left: 20px;
+    right: 20px;
+    height: 40px;
+    z-index: 20;
+    overflow: hidden;
+  }
+
+  .wave-svg { width: 100%; height: 100%; }
+
+  .wave-path {
+    fill: none;
+    stroke: #00ffc8;
+    stroke-width: 1.5;
+    animation: waveMove 2s linear infinite;
+    filter: drop-shadow(0 0 4px rgba(0,255,200,0.5));
+  }
+
+  @keyframes waveMove {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .reticle {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 19;
+    width: 120px;
+    height: 120px;
+    pointer-events: none;
+  }
+
+  .reticle-line {
+    position: absolute;
+    background: rgba(0,255,200,0.5);
+  }
+
+  .reticle-line.h { width: 100%; height: 1px; top: 50%; }
+  .reticle-line.v { width: 1px; height: 100%; left: 50%; }
+
+  .reticle-corner {
+    position: absolute;
+    width: 15px; height: 15px;
+    border-color: #00ffc8;
+    border-style: solid;
+    border-width: 0;
+  }
+
+  .reticle-corner.tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+  .reticle-corner.tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; }
+  .reticle-corner.bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; }
+  .reticle-corner.br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+
+  .data-tag {
+    position: absolute;
+    z-index: 22;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: rgba(0,255,200,0.8);
+    background: rgba(0,20,15,0.5);
+    padding: 3px 8px;
+    border: 1px solid rgba(0,255,200,0.3);
+    white-space: nowrap;
+    animation: tagFloat 6s ease-in-out infinite;
+  }
+
+  @keyframes tagFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  .glitch-stripe {
+    position: absolute;
+    width: 100%;
+    height: 2px;
+    z-index: 14;
+    animation: stripeGlitch 0.1s infinite;
+    opacity: 0;
+  }
+
+  @keyframes stripeGlitch {
+    0%, 92%, 100% { opacity: 0; }
+    93% { opacity: 1; background: rgba(255,0,100,0.3); transform: translateX(-5px); }
+    95% { opacity: 1; background: rgba(0,255,200,0.3); transform: translateX(5px); }
+    97% { opacity: 1; background: rgba(0,100,255,0.3); transform: translateX(-3px); }
+  }
+
+  .scroll-text {
+    position: absolute;
+    z-index: 20;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 8px;
+    color: rgba(0,255,200,0.6);
+    letter-spacing: 3px;
+    white-space: nowrap;
+    animation: scrollText 12s linear infinite;
+  }
+
+  @keyframes scrollText {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-200%); }
+  }
+
+  .radar {
+    position: absolute;
+    bottom: 240px;
+    right: 20px;
+    width: 80px;
+    height: 80px;
+    border: 1px solid rgba(0,255,200,0.4);
+    border-radius: 50%;
+    z-index: 20;
+    overflow: hidden;
+  }
+
+  .radar-sweep {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50%; height: 2px;
+    background: linear-gradient(90deg, rgba(0,255,200,0.8), transparent);
+    transform-origin: left center;
+    animation: radarSweep 3s linear infinite;
+  }
+
+  @keyframes radarSweep {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .radar-dot {
+    position: absolute;
+    width: 4px; height: 4px;
+    background: #00ffc8;
+    border-radius: 50%;
+    animation: radarDot 3s ease-in-out infinite;
+    box-shadow: 0 0 6px #00ffc8;
+  }
+
+  @keyframes radarDot {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+  }
+
+  .vignette {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 11;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+  }
+
+  .noise {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 13;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: noiseMove 0.5s steps(3) infinite;
+  }
+
+  @keyframes noiseMove {
+    0% { transform: translate(0,0); }
+    33% { transform: translate(-2px, 1px); }
+    66% { transform: translate(1px, -1px); }
+    100% { transform: translate(0,0); }
+  }
+
+  .border-flicker {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 17;
+    pointer-events: none;
+    border: 1px solid rgba(0,255,200,0.1);
+    animation: borderFlicker 4s ease-in-out infinite;
+  }
+
+  @keyframes borderFlicker {
+    0%, 100% { border-color: rgba(0,255,200,0.1); }
+    50% { border-color: rgba(0,255,200,0.3); }
+    52% { border-color: rgba(255,0,100,0.2); }
+    54% { border-color: rgba(0,255,200,0.1); }
+  }
+
+  .sys-bar {
+    position: absolute;
+    top: 85px;
+    left: 20px;
+    right: 20px;
+    z-index: 20;
+    display: flex;
+    gap: 4px;
+  }
+
+  .sys-segment {
+    flex: 1;
+    height: 3px;
+    background: rgba(0,255,200,0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sys-segment.active::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: #00ffc8;
+    animation: segFill 2s ease-in-out infinite;
+    box-shadow: 0 0 4px #00ffc8;
+  }
+
+  @keyframes segFill {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .particle {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: #00ffc8;
+    border-radius: 50%;
+    z-index: 16;
+    animation: particleFloat 8s linear infinite;
+    box-shadow: 0 0 4px #00ffc8;
+  }
+
+  @keyframes particleFloat {
+    0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-10vh) translateX(30px); opacity: 0; }
+  }
+
+  .data-stream {
+    position: absolute;
+    right: 5px;
+    top: 200px;
+    z-index: 18;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 7px;
+    color: rgba(0,255,200,0.5);
+    line-height: 1.3;
+    writing-mode: vertical-rl;
+    animation: streamScroll 20s linear infinite;
+    overflow: hidden;
+    height: 400px;
+  }
+
+  @keyframes streamScroll {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
+  }
+
+  .left-stream { left: 5px; right: auto; animation-direction: reverse; }
+
+  .crosshair {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 21;
+    width: 40px;
+    height: 40px;
+  }
+
+  .crosshair::before, .crosshair::after {
+    content: '';
+    position: absolute;
+    background: rgba(0,255,200,0.6);
+  }
+
+  .crosshair::before { width: 100%; height: 1px; top: 50%; }
+  .crosshair::after { width: 1px; height: 100%; left: 50%; }
+
+  .typing-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: #00ffc8;
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 2px solid #00ffc8;
+    animation: typing 3s steps(30) infinite, blink 0.5s step-end infinite;
+    max-width: 0;
+  }
+
+  @keyframes typing {
+    0%, 10% { max-width: 0; }
+    40%, 60% { max-width: 200px; }
+    90%, 100% { max-width: 0; }
+  }
+
+  @keyframes blink {
+    50% { border-color: transparent; }
+  }
+
+  /* ============ EDITABLE ============ */
+  [contenteditable="true"] {
+    outline: none;
+    cursor: text;
+    transition: all 0.3s ease;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin: -1px -4px;
+  }
+
+  [contenteditable="true"]:hover {
+    background: rgba(0,255,200,0.1);
+    box-shadow: 0 0 8px rgba(0,255,200,0.3);
+  }
+
+  [contenteditable="true"]:focus {
+    background: rgba(0,255,200,0.15);
+    box-shadow: 0 0 12px rgba(0,255,200,0.5);
+    border-bottom: 1px solid #00ffc8;
+  }
+
+  .save-indicator {
+    position: absolute;
+    top: 8px;
+    right: 20px;
+    z-index: 30;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: #00ff88;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    text-shadow: 0 0 6px #00ff88;
+  }
+
+  .save-indicator.show { opacity: 1; animation: saveFade 1.5s ease-out; }
+
+  @keyframes saveFade {
+    0% { opacity: 0; transform: translateY(-5px); }
+    20% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-5px); }
+  }
+
+  /* ============ BOTONES DE ACCIÓN ============ */
+  .action-buttons {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 15px;
+  }
+
+  .action-btn {
+    border: none;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    letter-spacing: 2px;
+    padding: 12px 18px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+
+  .action-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 0; height: 0;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.5s ease;
+  }
+
+  .action-btn:active::before {
+    width: 200px; height: 200px;
+    opacity: 0;
+  }
+
+  .action-btn:active {
+    transform: scale(0.92);
+  }
+
+  /* HATE */
+  .btn-hate {
+    background: linear-gradient(135deg, #1a0000, #4a0015);
+    color: #ff2a4d;
+    border: 2px solid #ff2a4d;
+    box-shadow: 0 0 15px rgba(255, 42, 77, 0.5), inset 0 0 10px rgba(255, 42, 77, 0.2);
+    text-shadow: 0 0 8px rgba(255, 42, 77, 0.8);
+  }
+
+  .btn-hate:hover {
+    box-shadow: 0 0 25px rgba(255, 42, 77, 0.8), inset 0 0 15px rgba(255, 42, 77, 0.4);
+  }
+
+  .btn-hate .btn-icon {
+    font-size: 16px;
+    filter: drop-shadow(0 0 4px #ff2a4d);
+  }
+
+  /* LOVE */
+  .btn-love {
+    background: linear-gradient(135deg, #3a0020, #ff4d88);
+    color: #fff;
+    border: 2px solid #ff8fb8;
+    box-shadow: 0 0 15px rgba(255, 77, 136, 0.6), inset 0 0 10px rgba(255, 143, 184, 0.3);
+    text-shadow: 0 0 8px rgba(255, 143, 184, 0.8);
+  }
+
+  .btn-love:hover {
+    box-shadow: 0 0 25px rgba(255, 77, 136, 0.9), inset 0 0 15px rgba(255, 143, 184, 0.5);
+  }
+
+  .btn-love .btn-icon {
+    font-size: 18px;
+    filter: drop-shadow(0 0 4px #ff8fb8);
+    animation: heartBeat 1.5s ease-in-out infinite;
+  }
+
+  @keyframes heartBeat {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+  }
+
+  /* PILL */
+  .btn-pill {
+    background: linear-gradient(135deg, #1a0040, #6a2aff, #00e5ff);
+    color: #fff;
+    border: 2px solid #00e5ff;
+    box-shadow: 0 0 15px rgba(106, 42, 255, 0.6), inset 0 0 10px rgba(0, 229, 255, 0.3);
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
+    padding: 12px 22px;
+  }
+
+  .btn-pill:hover {
+    box-shadow: 0 0 25px rgba(106, 42, 255, 0.9), inset 0 0 15px rgba(0, 229, 255, 0.5);
+  }
+
+  .pill-icon {
+    width: 22px;
+    height: 12px;
+    background: linear-gradient(90deg, #ff2a4d 0%, #ff2a4d 50%, #fff 50%, #fff 100%);
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.5);
+    box-shadow: 0 0 6px rgba(255, 42, 77, 0.8), 0 0 6px rgba(255, 255, 255, 0.5);
+    position: relative;
+  }
+
+  .pill-icon::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    width: 18px;
+    height: 3px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.6), transparent);
+    border-radius: 3px;
+  }
+
+  /* UPLOAD BTN */
+  .upload-btn {
+    position: absolute;
+    top: 8px;
+    left: 20px;
+    z-index: 30;
+    background: rgba(0, 20, 15, 0.7);
+    border: 1px solid rgba(0,255,200,0.4);
+    color: #00ffc8;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 8px;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .upload-btn:hover {
+    background: rgba(0,255,200,0.15);
+    box-shadow: 0 0 10px rgba(0,255,200,0.5);
+  }
+
+  #imageUpload { display: none; }
+
+</style>
+</head>
+<body>
+
+<div class="tiktok-container" id="container">
+  <img class="base-image" id="baseImage" src="https://image.qwenlm.ai/public_source/1c25a207-30ed-4f41-a764-7c88cd74ff4d/13a9e2520-7908-463e-9a9f-e3ae7951d48c.png" alt="Android">
+
+  <!-- Skin effects -->
+  <div class="skin-effects">
+    <svg class="veins-svg" id="veinsSvg" viewBox="0 0 450 800" preserveAspectRatio="none">
+      <!-- Venas izquierda cara -->
+      <path class="vein-path" d="M 150 450 Q 140 420 145 390 Q 150 360 155 330 Q 160 300 170 280"/>
+      <path class="vein-path v2" d="M 145 390 Q 130 380 120 370 Q 110 360 105 350"/>
+      <path class="vein-path v3" d="M 155 330 Q 170 320 180 310 Q 190 300 195 285"/>
+      <path class="vein-path v4" d="M 150 450 Q 165 440 175 435 Q 185 430 195 420"/>
+      <path class="vein-path v5" d="M 170 280 Q 165 260 160 240 Q 158 220 165 200"/>
+      <!-- Venas derecha cara -->
+      <path class="vein-path" d="M 300 450 Q 310 420 305 390 Q 300 360 295 330 Q 290 300 280 280"/>
+      <path class="vein-path v2" d="M 305 390 Q 320 380 330 370 Q 340 360 345 350"/>
+      <path class="vein-path v3" d="M 295 330 Q 280 320 270 310 Q 260 300 255 285"/>
+      <path class="vein-path v4" d="M 300 450 Q 285 440 275 435 Q 265 430 255 420"/>
+      <path class="vein-path v5" d="M 280 280 Q 285 260 290 240 Q 292 220 285 200"/>
+      <!-- Venas cuello -->
+      <path class="vein-path v6" d="M 200 520 Q 210 490 220 470 Q 230 455 240 445"/>
+      <path class="vein-path v7" d="M 250 520 Q 245 490 240 470 Q 235 455 230 445"/>
+      <path class="vein-path v8" d="M 180 500 Q 170 480 160 460"/>
+      <path class="vein-path v8" d="M 270 500 Q 280 480 290 460"/>
+    </svg>
+
+    <div class="cheek left" id="cheekLeft"></div>
+    <div class="cheek right" id="cheekRight"></div>
+  </div>
+
+  <div class="scanlines"></div>
+  <div class="h-scan"></div>
+  <div class="glitch-overlay"></div>
+  <div class="vignette"></div>
+  <div class="noise"></div>
+  <div class="border-flicker"></div>
+
+  <div class="glitch-stripe" style="top:25%"></div>
+  <div class="glitch-stripe" style="top:45%"></div>
+  <div class="glitch-stripe" style="top:65%"></div>
+  <div class="glitch-stripe" style="top:80%"></div>
+
+  <div class="corner corner-tl"></div>
+  <div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div>
+  <div class="corner corner-br"></div>
+
+  <div class="circle-hud c1"></div>
+  <div class="circle-hud c2"></div>
+
+  <div class="reticle">
+    <div class="reticle-line h"></div>
+    <div class="reticle-line v"></div>
+    <div class="reticle-corner tl"></div>
+    <div class="reticle-corner tr"></div>
+    <div class="reticle-corner bl"></div>
+    <div class="reticle-corner br"></div>
+  </div>
+
+  <div class="crosshair"></div>
+
+  <div class="save-indicator" id="saveIndicator">✓ SAVED</div>
+
+  <label class="upload-btn" for="imageUpload">📷 SUBIR IMAGEN</label>
+  <input type="file" id="imageUpload" accept="image/*">
+
+  <div class="top-hud">
+    <div>
+      <div class="hud-label" data-save="label-sys" contenteditable="true">SYS.STATUS</div>
+      <div class="status-indicator">
+        <div class="status-dot"></div>
+        <div class="hud-value" data-save="val-status" contenteditable="true">ONLINE</div>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="hud-label" data-save="label-uptime" contenteditable="true">UPTIME</div>
+      <div class="hud-value" id="uptime">00:00:00</div>
+    </div>
+  </div>
+
+  <div class="sys-bar">
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+    <div class="sys-segment active"></div>
+  </div>
+
+  <div class="glitch-text top-title" data-save="title-main" contenteditable="true">NEXUS-7 // ACTIVE</div>
+
+  <div class="left-panel">
+    <div class="panel-box">
+      <div class="panel-title" data-save="p1-title" contenteditable="true">NEURAL LINK</div>
+      <div class="data-row">
+        <span class="data-label" data-save="p1-l1" contenteditable="true">FREQ</span>
+        <span class="data-val" data-save="p1-v1" data-auto="freq" contenteditable="true">2.47 GHz</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label" data-save="p1-l2" contenteditable="true">SYNC</span>
+        <span class="data-val" data-save="p1-v2" data-auto="sync" contenteditable="true">98.7%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title" data-save="p2-title" contenteditable="true">CORE TEMP</div>
+      <div class="data-row">
+        <span class="data-label" data-save="p2-l1" contenteditable="true">CPU</span>
+        <span class="data-val" data-save="p2-v1" data-auto="cpu" contenteditable="true">37.2°C</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label" data-save="p2-l2" contenteditable="true">GPU</span>
+        <span class="data-val" data-save="p2-v2" data-auto="gpu" contenteditable="true">41.8°C</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill p2"></div></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title" data-save="p3-title" contenteditable="true">MEMORY</div>
+      <div class="data-row">
+        <span class="data-label" data-save="p3-l1" contenteditable="true">RAM</span>
+        <span class="data-val" data-save="p3-v1" contenteditable="true">12.4 TB</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label" data-save="p3-l2" contenteditable="true">STOR</span>
+        <span class="data-val" data-save="p3-v2" contenteditable="true">847 PB</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill p3"></div></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title" data-save="p4-title" contenteditable="true">AUDIO INPUT</div>
+      <div class="typing-text" data-save="p4-type" contenteditable="true">SCANNING FREQUENCIES...</div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-box">
+      <div class="panel-title" data-save="p5-title" contenteditable="true">SIGNAL</div>
+      <div class="data-row">
+        <span class="data-label" data-save="p5-l1" contenteditable="true">STR</span>
+        <span class="data-val" data-save="p5-v1" data-auto="sig" contenteditable="true">-42 dBm</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label" data-save="p5-l2" contenteditable="true">LAT</span>
+        <span class="data-val" data-save="p5-v2" data-auto="lat" contenteditable="true">12 ms</span>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title" data-save="p6-title" contenteditable="true">ENCRYPTION</div>
+      <div class="data-row">
+        <span class="data-label" data-save="p6-l1" contenteditable="true">TYPE</span>
+        <span class="data-val" data-save="p6-v1" contenteditable="true">AES-512</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label" data-save="p6-l2" contenteditable="true">KEY</span>
+        <span class="data-val" data-save="p6-v2" data-auto="key" contenteditable="true" style="font-size:8px">0x7F3A</span>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title" data-save="p7-title" contenteditable="true">LOCATION</div>
+      <div class="data-row">
+        <span class="data-label" data-save="p7-l1" contenteditable="true">LAT</span>
+        <span class="data-val" data-save="p7-v1" contenteditable="true">40.7128°</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label" data-save="p7-l2" contenteditable="true">LNG</span>
+        <span class="data-val" data-save="p7-v2" contenteditable="true">-74.0060°</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="audio-viz" id="audioViz"></div>
+
+  <div class="waveform">
+    <svg class="wave-svg" viewBox="0 0 400 40" preserveAspectRatio="none">
+      <path class="wave-path" id="wavePath" d="" />
+    </svg>
+  </div>
+
+  <div class="radar">
+    <div class="radar-sweep"></div>
+    <div class="radar-dot" style="top:30%;left:60%"></div>
+    <div class="radar-dot" style="top:60%;left:30%;animation-delay:-1s"></div>
+    <div class="radar-dot" style="top:45%;left:70%;animation-delay:-2s"></div>
+  </div>
+
+  <div class="data-tag" data-save="tag1" contenteditable="true" style="top:35%;left:10px">ID: NX7-4421</div>
+  <div class="data-tag" data-save="tag2" contenteditable="true" style="top:55%;right:10px;animation-delay:-2s">PROTO: v4.2.1</div>
+  <div class="data-tag" data-save="tag3" contenteditable="true" style="bottom:250px;left:10px;animation-delay:-4s">MODE: STEALTH</div>
+
+  <div class="scroll-text" data-save="scroll1" contenteditable="true" style="top:95px">◆ SYSTEM BREACH DETECTED ◆ REROUTING POWER ◆ NEURAL LINK ESTABLISHED ◆ DATA STREAM ACTIVE ◆</div>
+  <div class="scroll-text" data-save="scroll2" contenteditable="true" style="bottom:210px;animation-delay:-6s;animation-duration:15s">◈ QUANTUM ENCRYPTION ACTIVE ◈ FIREWALL STATUS: NOMINAL ◈ THREAT LEVEL: LOW ◈</div>
+
+  <div class="bottom-hud">
+    <div class="bottom-bar">
+      <div>
+        <div class="bottom-text" data-save="b-text1" contenteditable="true">UNIT-07</div>
+        <div class="bottom-code" data-save="b-code" contenteditable="true">0x4F2A::ACTIVE</div>
+      </div>
+      <div style="text-align:right">
+        <div class="bottom-text" data-save="b-text2" contenteditable="true">PACKETS</div>
+        <div class="bottom-code" data-save="b-packets" data-auto="packets" contenteditable="true">1,247,893</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTONES DE ACCIÓN -->
+  <div class="action-buttons">
+    <button class="action-btn btn-hate" id="btnHate">
+      <span class="btn-icon">💀</span>
+      <span>HATE</span>
+    </button>
+
+    <button class="action-btn btn-pill" id="btnPill">
+      <span class="pill-icon"></span>
+    </button>
+
+    <button class="action-btn btn-love" id="btnLove">
+      <span class="btn-icon">❤</span>
+      <span>LOVE</span>
+    </button>
+  </div>
+
+  <div id="particles"></div>
+  <div id="hexRain"></div>
+</div>
+
+<script>
+  const hexChars = '0123456789ABCDEF';
+  const STORAGE_KEY = 'hudData_v2';
+  const IMAGE_KEY = 'hudImage_v2';
+
+  // ====== LOCAL STORAGE ======
+  function saveAll() {
+    const data = {};
+    document.querySelectorAll('[data-save]').forEach(el => {
+      data[el.dataset.save] = el.textContent;
+    });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      showSaveIndicator();
+    } catch(e) { console.error(e); }
+  }
+
+  function loadAll() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      document.querySelectorAll('[data-save]').forEach(el => {
+        if (data[el.dataset.save] !== undefined) {
+          el.textContent = data[el.dataset.save];
+        }
+      });
+    } catch(e) { console.error(e); }
+  }
+
+  function showSaveIndicator() {
+    const ind = document.getElementById('saveIndicator');
+    ind.classList.remove('show');
+    void ind.offsetWidth;
+    ind.classList.add('show');
+  }
+
+  // Auto-save al editar
+  document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+    el.addEventListener('input', () => {
+      // Marcar como editado por el usuario (no auto-actualizar)
+      if (el.dataset.auto) {
+        el.dataset.userEdited = 'true';
+      }
+      saveAll();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        el.blur();
+      }
+    });
+  });
+
+  // ====== IMAGEN UPLOAD ======
+  const imageUpload = document.getElementById('imageUpload');
+  const baseImage = document.getElementById('baseImage');
+
+  // Cargar imagen guardada
+  try {
+    const savedImage = localStorage.getItem(IMAGE_KEY);
+    if (savedImage) baseImage.src = savedImage;
+  } catch(e) {}
+
+  imageUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      baseImage.src = ev.target.result;
+      try {
+        localStorage.setItem(IMAGE_KEY, ev.target.result);
+      } catch(err) {
+        console.warn('Imagen muy grande para guardar');
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ====== GENERAR ELEMENTOS VISUALES ======
+  const audioViz = document.getElementById('audioViz');
+  for (let i = 0; i < 25; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'audio-bar';
+    bar.style.animationDelay = `${Math.random() * 0.8}s`;
+    bar.style.animationDuration = `${0.4 + Math.random() * 0.6}s`;
+    audioViz.appendChild(bar);
+  }
+
+  const particlesContainer = document.getElementById('particles');
+  for (let i = 0; i < 15; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = `${Math.random() * 100}%`;
+    p.style.animationDelay = `${Math.random() * 8}s`;
+    p.style.animationDuration = `${6 + Math.random() * 6}s`;
+    particlesContainer.appendChild(p);
+  }
+
+  const hexRain = document.getElementById('hexRain');
+  for (let i = 0; i < 6; i++) {
+    const col = document.createElement('div');
+    col.className = 'hex-rain';
+    col.style.left = `${10 + Math.random() * 80}%`;
+    col.style.animationDelay = `${Math.random() * 5}s`;
+    col.style.animationDuration = `${4 + Math.random() * 4}s`;
+    let text = '';
+    for (let j = 0; j < 25; j++) {
+      text += hexChars[Math.floor(Math.random() * 16)] + hexChars[Math.floor(Math.random() * 16)] + ' ';
+    }
+    col.textContent = text;
+    hexRain.appendChild(col);
+  }
+
+  // ====== VALORES AUTO ======
+  function randomVal(min, max, decimals = 1) {
+    return (Math.random() * (max - min) + min).toFixed(decimals);
+  }
+
+  function updateAutoValues() {
+    const autoElements = document.querySelectorAll('[data-auto]');
+    autoElements.forEach(el => {
+      if (el.dataset.userEdited === 'true' || document.activeElement === el) return;
+
+      const type = el.dataset.auto;
+      let val = '';
+      switch(type) {
+        case 'freq': val = `${randomVal(2.1, 3.2, 2)} GHz`; break;
+        case 'sync': val = `${randomVal(95, 99.9, 1)}%`; break;
+        case 'cpu': val = `${randomVal(35, 42, 1)}°C`; break;
+        case 'gpu': val = `${randomVal(38, 45, 1)}°C`; break;
+        case 'sig': val = `-${Math.floor(randomVal(35, 55, 0))} dBm`; break;
+        case 'lat': val = `${Math.floor(randomVal(8, 18, 0))} ms`; break;
+        case 'key': val = `0x${Array.from({length:4}, () => hexChars[Math.floor(Math.random()*16)]).join('')}`; break;
+        case 'packets': val = (Math.floor(Math.random() * 999999) + 1000000).toLocaleString(); break;
+      }
+      if (val) el.textContent = val;
+    });
+  }
+
+  setInterval(updateAutoValues, 1500);
+
+  // Uptime
+  let seconds = 0;
+  setInterval(() => {
+    seconds++;
+    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+    const s = String(seconds % 60).padStart(2, '0');
+    document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+  }, 1000);
+
+  // Waveform
+  function updateWave() {
+    const path = document.getElementById('wavePath');
+    let d = 'M 0 20 ';
+    for (let x = 0; x <= 400; x += 5) {
+      const y = 20 + Math.sin(x * 0.05 + Date.now() * 0.003) * 12 + Math.sin(x * 0.1) * 5;
+      d += `L ${x} ${y} `;
+    }
+    for (let x = 0; x <= 400; x += 5) {
+      const y = 20 + Math.sin(x * 0.05 + Date.now() * 0.003) * 12 + Math.sin(x * 0.1) * 5;
+      d += `L ${x + 400} ${y} `;
+    }
+    path.setAttribute('d', d);
+    requestAnimationFrame(updateWave);
+  }
+  updateWave();
+
+  // Glitch stripes
+  setInterval(() => {
+    document.querySelectorAll('.glitch-stripe').forEach(s => {
+      s.style.top = `${Math.random() * 100}%`;
+    });
+  }, 2000);
+
+  // ====== BOTONES DE ACCIÓN ======
+  const container = document.getElementById('container');
+  const veinsSvg = document.getElementById('veinsSvg');
+  const cheekLeft = document.getElementById('cheekLeft');
+  const cheekRight = document.getElementById('cheekRight');
+
+  // HATE - Venas negras
+  document.getElementById('btnHate').addEventListener('click', () => {
+    // Flash effect
+    const flash = document.createElement('div');
+    flash.className = 'effect-flash hate';
+    container.appendChild(flash);
+    setTimeout(() => flash.remove(), 1000);
+
+    // Activar venas (re-animar)
+    veinsSvg.classList.remove('active');
+    veinsSvg.querySelectorAll('.vein-path').forEach(p => {
+      p.style.animation = 'none';
+      void p.offsetWidth;
+      p.style.animation = '';
+    });
+    veinsSvg.classList.add('active');
+
+    // Desactivar después de 5 segundos
+    setTimeout(() => {
+      veinsSvg.classList.remove('active');
+    }, 5000);
+  });
+
+  // LOVE - Mofletes colorados
+  document.getElementById('btnLove').addEventListener('click', () => {
+    const flash = document.createElement('div');
+    flash.className = 'effect-flash love';
+    container.appendChild(flash);
+    setTimeout(() => flash.remove(), 1000);
+
+    cheekLeft.classList.add('active');
+    cheekRight.classList.add('active');
+
+    setTimeout(() => {
+      cheekLeft.classList.remove('active');
+      cheekRight.classList.remove('active');
+    }, 4000);
+  });
+
+  // PILL - Distorsión
+  document.getElementById('btnPill').addEventListener('click', () => {
+    container.classList.remove('distort');
+    void container.offsetWidth;
+    container.classList.add('distort');
+    setTimeout(() => {
+      container.classList.remove('distort');
+    }, 1500);
+  });
+
+  // ====== INICIALIZACIÓN ======
+  loadAll();
+</script>
+
+</body>
+</html>
